@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+.venv/
+venv/
+
+# Database (committed after backfill, not during dev)
+data/mf_research.db
+
+# Frontend
+site/node_modules/
+site/dist/
+site/.vite/
+
+# Pre-built JSON (committed to repo for Netlify static hosting)
+# site/data/  ← kept in git
+
+# Logs & pytest
+*.log
+.pytest_cache/
+.coverage
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp

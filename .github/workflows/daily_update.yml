@@ -1,0 +1,75 @@
+name: Daily Data Update
+
+on:
+  schedule:
+    # 23:45 IST = 18:15 UTC
+    - cron: '15 18 * * *'
+    # 08:15 IST catch-up = 02:45 UTC next day
+    - cron: '45 2 * * *'
+  workflow_dispatch:
+    inputs:
+      run_repair:
+        description: 'Run gap repair after fetch'
+        required: false
+        default: 'false'
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create data directory
+        run: mkdir -p data site/data
+
+      - name: Download database from GitHub Release
+        run: |
+          gh release download database --pattern "mf_research.db" --dir data --clobber || echo "No database asset found, starting fresh"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch daily NAV + index data
+        id: fetch
+        run: python scripts/fetch_daily.py
+        # Exit 1 = fetch failed → workflow fails → NO commit → yesterday's site stays live
+
+      - name: Run gap repair (if requested)
+        if: github.event.inputs.run_repair == 'true'
+        run: |
+          python scripts/backfill_amfi.py --repair
+          python scripts/backfill_indices.py --synth
+
+      - name: Build all JSON outputs
+        run: python scripts/build_json.py
+
+      - name: Upload updated database to GitHub Release
+        run: |
+          gh release create database --notes "Database storage for daily pipeline" || true
+          gh release upload database data/mf_research.db --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit and push updated data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add site/data/
+          git diff --cached --quiet || git commit -m "chore: data update $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
