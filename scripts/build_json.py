@@ -29,7 +29,7 @@ ROOT_DIR   = os.path.dirname(SCRIPT_DIR)
 sys.path.insert(0, ROOT_DIR)
 
 DB_PATH    = os.path.join(ROOT_DIR, "data", "mf_research.db")
-OUTPUT_DIR = os.path.join(ROOT_DIR, "site", "data")
+OUTPUT_DIR = os.path.join(ROOT_DIR, "site", "public", "data")
 
 from scripts.init_db import get_conn as _get_conn
 from engine.calculation_engine import (

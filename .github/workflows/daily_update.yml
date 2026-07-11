@@ -35,7 +35,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Create data directory
-        run: mkdir -p data site/data
+        run: mkdir -p data site/public/data
 
       - name: Download database from GitHub Release
         run: |
@@ -68,7 +68,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add site/data/
+          git add site/public/data/
           git diff --cached --quiet || git commit -m "chore: data update $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push
         env:

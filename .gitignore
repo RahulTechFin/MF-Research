@@ -15,7 +15,7 @@ site/dist/
 site/.vite/
 
 # Pre-built JSON (committed to repo for Netlify static hosting)
-# site/data/  ← kept in git
+# site/public/data/  ← kept in git
 
 # Logs & pytest
 *.log

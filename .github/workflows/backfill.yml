@@ -37,7 +37,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Create directories
-        run: mkdir -p data site/data
+        run: mkdir -p data site/public/data
 
       - name: Initialise database schema + seed data
         run: python scripts/init_db.py
@@ -71,7 +71,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add site/data/
+          git add site/public/data/
           git diff --cached --quiet || git commit -m "feat: initial backfill complete $(date -u '+%Y-%m-%d')"
           git push
         env:
