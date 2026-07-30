@@ -4,3 +4,6 @@ pandas==2.2.3
 numpy==1.26.4
 python-dateutil==2.9.0
 tqdm==4.67.1
+
+# Google Sheets backup (scripts/backup_gsheets.py) — not needed by the daily
+# pipeline, so install separately:  pip install -r requirements-backup.txt

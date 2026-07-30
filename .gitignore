@@ -2,12 +2,25 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-.env
 .venv/
 venv/
 
-# Database (committed after backfill, not during dev)
-data/mf_research.db
+# Secrets — the admin password verifier lives in site/.env.local and must
+# never be committed. .env.team IS committed: it only sets VITE_PROFILE=team.
+.env
+.env.local
+.env.*.local
+site/.env.local
+
+# Databases are disposable build artifacts, never stored.
+# The scheme universe lives in data/scheme_catalogue.json, which IS committed.
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# Google Sheets backup credentials + local checkpoint
+secrets/
+data/gsheets_backup_state.json
 
 # Frontend
 site/node_modules/
@@ -31,3 +44,10 @@ desktop.ini
 .vscode/
 .idea/
 *.swp
+
+# The rolling 6-year index window is a mirror of what lives in Supabase Storage
+# (scripts/index_store.py), rebuilt by every run — so it is a cache, not source.
+# data/index_history.json.gz IS committed: it is the read-only 2010-onward seed
+# that makes the first run work against an empty bucket.
+data/index_store.json.gz
+data/index_store.json.gz.part

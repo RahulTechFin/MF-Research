@@ -1,0 +1,85 @@
+{
+  "_comment": [
+    "SINGLE SOURCE OF TRUTH for what each audience sees.",
+    "",
+    "TO SHOW A TAB TO THE TEAM: move its id into publicSections. That is the",
+    "whole change — the nav, the section guard and the data allowlist all read",
+    "from here, so nothing can drift out of sync.",
+    "",
+    "dataFiles lists the JSON each section fetches, as regexes matched against",
+    "paths relative to dist/data. scripts/prune_data.mjs unions the entries for",
+    "publicSections and deletes everything else from a team build, so a section",
+    "can never end up visible with its data missing (or hidden with its data",
+    "still deployed).",
+    "",
+    "Both audiences are the same app reading the same files, produced by the",
+    "same daily run from api.mfapi.in. There is no second dataset."
+  ],
+  "publicSections": [
+    "market-pulse",
+    "quartile",
+    "watchlist"
+  ],
+  "adminSections": [
+    "category",
+    "screener",
+    "rolling",
+    "risk",
+    "blend"
+  ],
+  "labels": {
+    "market-pulse": "Market Pulse",
+    "category": "Market Trends",
+    "screener": "Fund Screener & Trend Finder",
+    "quartile": "Quartile Ranking",
+    "rolling": "Rolling & P2P",
+    "risk": "Risk Lab 🔒",
+    "blend": "Blend Studio",
+    "watchlist": "Fund Signals"
+  },
+  "dataFiles": {
+    "market-pulse": [
+      "^meta\\.json$",
+      "^indices\\.json$",
+      "^index/[^/]+\\.json$"
+    ],
+    "quartile": [
+      "^meta\\.json$",
+      "^indices\\.json$",
+      "^quartiles_[^/]+\\.json$"
+    ],
+    "category": [
+      "^meta\\.json$",
+      "^indices\\.json$",
+      "^glance_[^/]+\\.json$",
+      "^category_history/[^/]+\\.json$"
+    ],
+    "screener": [
+      "^meta\\.json$",
+      "^indices\\.json$",
+      "^category_[^/]+\\.json$",
+      "^nav/[^/]+\\.json$",
+      "^index/[^/]+\\.json$"
+    ],
+    "rolling": [
+      "^meta\\.json$",
+      "^category_[^/]+\\.json$",
+      "^rolling_[^/]+\\.json$"
+    ],
+    "risk": [
+      "^meta\\.json$",
+      "^risk_[^/]+\\.json$",
+      "^nav/[^/]+\\.json$"
+    ],
+    "blend": [
+      "^meta\\.json$",
+      "^index/[^/]+\\.json$",
+      "^category_history/[^/]+\\.json$"
+    ],
+    "watchlist": [
+      "^meta\\.json$",
+      "^indices\\.json$",
+      "^watchlist_[^/]+\\.json$"
+    ]
+  }
+}

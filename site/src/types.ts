@@ -39,6 +39,12 @@ export interface IndexCard {
   change_1d: number | null
   change_1d_abs: number | null
   sparkline: [string, number][]
+  /**
+   * Full daily history, present when the card came from the live Supabase files
+   * (which carry it) and absent when it came from the committed indices.json
+   * fallback. IndexChartModal uses it to skip a second fetch.
+   */
+  history?: [string, number][]
 }
 
 export interface IndicesData {
@@ -85,23 +91,9 @@ export interface CategoryTableData {
   benchmark: Record<string, number | null>
 }
 
-export interface MoverEntry {
-  rank: number
-  scheme_code: string
-  scheme_name: string
-  return: number
-  spread_vs_avg: number | null
-}
-
-export interface MoversData {
-  as_of: string
-  category: string
-  periods: Record<string, {
-    top10: MoverEntry[]
-    bottom10: MoverEntry[]
-    cat_avg: number | null
-  }>
-}
+// MoverEntry / MoversData removed — movers_{slug}.json is no longer generated.
+// Leaders & Laggards is computed in the browser from the category table that
+// FundScreener has already loaded.
 
 export interface QuartileFundRow {
   scheme_code: string
@@ -175,12 +167,6 @@ export interface DrawdownData {
 
 export interface NavSeries {
   scheme_code: string
-  series: [string, number][]
-}
-
-export interface IndexSeries {
-  index_id: number
-  index_name: string
   series: [string, number][]
 }
 

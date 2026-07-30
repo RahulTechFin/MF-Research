@@ -1,0 +1,167 @@
+name: Update Indices
+
+# Refreshes the benchmark index history and publishes it to Supabase Storage.
+#
+# Deliberately separate from daily_update.yml. That workflow treats a Yahoo
+# failure as non-fatal — correctly, since good NAV data should still publish —
+# which is precisely why a broken index fetch sat unnoticed for three weeks.
+# Here a failure is the whole job, so the schedule goes red and someone looks.
+#
+# Nothing is committed and Netlify is never rebuilt. Everything lands in the
+# public "Indicies Data" bucket:
+#
+#   indices.json                     <- Market Pulse strip, read by the browser
+#   index/{id}.json                  <- chart series, read by the browser
+#   indices/index_history.json.gz    <- the rolling 6-year store, read by the pipeline
+#
+# netlify.toml proxies /data/indices.json and /data/index/* to the first two, so
+# the deployed site picks up new closes as soon as this job finishes.
+#
+# Runs before the NAV pipeline (23:45 IST) so each dashboard build picks up the
+# same evening's closes. NSE closes 15:30 IST; 17:30 leaves time for Yahoo to
+# settle the daily bar.
+
+on:
+  schedule:
+    # 17:30 IST = 12:00 UTC, Mon-Fri (Indian markets are shut at the weekend,
+    # and a Saturday run would only re-request Friday's close).
+    - cron: '0 12 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: 'Discard the existing store and rebuild the full window'
+        type: boolean
+        required: false
+        default: false
+      dry_run:
+        description: 'Build and validate, but do not push to Supabase'
+        type: boolean
+        required: false
+        default: false
+      retention_years:
+        description: 'Override the retention window (default 6)'
+        required: false
+        default: ''
+
+concurrency:
+  group: update-indices
+  cancel-in-progress: false
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+  SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
+
+jobs:
+  indices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Read-only: this workflow publishes to Supabase and never pushes a commit.
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      # requests is the only thing this path needs — the store is gzipped JSON
+      # and the fetch is the v8 chart endpoint, so no pandas, numpy or pyarrow.
+      - name: Install dependencies
+        run: pip install requests
+
+      # Without credentials the script builds the store locally and exits 0
+      # without publishing, which would look like a healthy run while nothing
+      # was ever uploaded. Fail loudly instead.
+      - name: Require Supabase credentials
+        run: |
+          test -n "$SUPABASE_URL" \
+            || { echo "::error::SUPABASE_URL secret is not set"; exit 1; }
+          test -n "$SUPABASE_SERVICE_KEY" \
+            || { echo "::error::SUPABASE_SERVICE_KEY secret is not set"; exit 1; }
+          echo "Supabase configured (bucket: ${SUPABASE_BUCKET:-Indicies Data})"
+
+      # --publish-json rebuilds indices.json and index/*.json from the refreshed
+      # store into a temp dir and uploads them to the bucket root. Without it the
+      # store would update but the site would keep serving the older closes.
+      - name: Refresh index history and publish Market Pulse JSON
+        id: refresh
+        run: |
+          python scripts/update_indices.py --publish-json \
+            ${{ github.event.inputs.seed == 'true' && '--seed' || '' }} \
+            ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }} \
+            ${{ github.event.inputs.retention_years && format('--retention-years {0}', github.event.inputs.retention_years) || '' }}
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: Report published state
+        if: always()
+        run: python scripts/update_indices.py --status
+        env:
+          PYTHONIOENCODING: utf-8
+
+      # Read the published file back with no credentials at all — the same way a
+      # browser will. Catches the failure that matters most and is invisible
+      # otherwise: upload succeeded, but the bucket got flipped back to private,
+      # so every visitor gets a 400 while the workflow looks green.
+      - name: Verify the site can read it without a key
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          python - <<'PY'
+          import datetime, json, os, sys, urllib.error, urllib.parse, urllib.request
+          sys.path.insert(0, ".")
+          from scripts.index_store import STRIP
+
+          base = os.environ["SUPABASE_URL"].rstrip("/")
+          bucket = (os.environ.get("SUPABASE_BUCKET") or "Indicies Data").strip().strip('"')
+          root = f"{base}/storage/v1/object/public/{urllib.parse.quote(bucket)}"
+          print(f"Anonymous read from {root}")
+
+          rows, missing = [], []
+          for index_id, name, slug in STRIP:
+              url = f"{root}/{slug}.json"
+              try:
+                  # urllib sends no Authorization header, so this proves the path
+                  # a visitor's browser uses - not merely that the object exists.
+                  with urllib.request.urlopen(url, timeout=30) as r:
+                      d = json.loads(r.read())
+              except urllib.error.HTTPError as e:
+                  print(f"  {name:<22} HTTP {e.code}")
+                  missing.append(f"{slug}.json (HTTP {e.code})")
+                  continue
+              rows.append(d)
+              print(f"  {name:<22} {d['date']}  {d['latest_close']:>11}  "
+                    f"{len(d.get('history') or [])} pts")
+
+          if missing:
+              sys.exit(f"::error::not publicly readable: {', '.join(missing)}. "
+                       f"Is the '{bucket}' bucket still public?")
+
+          # A single frozen index is the failure this exists to surface: the run
+          # is green, the files are all present, but one stopped moving weeks ago.
+          newest = max(d["date"] for d in rows)
+          cut = (datetime.date.fromisoformat(newest) - datetime.timedelta(days=6)).isoformat()
+          stale = [d["index_name"] for d in rows if d["date"] < cut]
+          if stale:
+              print(f"::warning::stale relative to {newest}: {', '.join(stale)}")
+          print(f"All {len(rows)} indices readable without a key. Newest close {newest}.")
+          PY
+
+      # Nothing is committed: the store and the site JSON both live in the
+      # bucket, and data/index_store.json.gz is gitignored.
+      - name: Confirm nothing was committed
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::warning::working tree changed; this workflow should not commit"
+            git status --porcelain
+          else
+            echo "Working tree clean — data lives in Supabase only. ✔"
+          fi

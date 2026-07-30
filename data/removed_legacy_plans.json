@@ -1,0 +1,1958 @@
+[
+  {
+    "scheme_code": "100036",
+    "scheme_name": "Birla Sun Life Freedom Fund-Plan B (Growth)",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "100042",
+    "scheme_name": "Aditya Birla Sun Life Liquid Fund-Retail (Growth)",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "100043",
+    "scheme_name": "Aditya Birla Sun Life Liquid Fund-Institutional (Growth)",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "100151",
+    "scheme_name": "Principal Retail Equity Savings Fund - Growth Option",
+    "amc_name": "Principal Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "100187",
+    "scheme_name": "ING Income Fund-Institutional Plan - Growth Option",
+    "amc_name": "ING Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "100196",
+    "scheme_name": "ING Liquid Fund-Institutional Growth Option",
+    "amc_name": "ING Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "100199",
+    "scheme_name": "ING Liquid Fund-Super Institutional Growth Option",
+    "amc_name": "ING Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "100237",
+    "scheme_name": "JM High Liquidity Fund-- Institutional Plan - Growth",
+    "amc_name": "JM Financial Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "100247",
+    "scheme_name": "JM Liquid Fund (Regular) - Super Institutional Plan - Growth Option",
+    "amc_name": "JM Financial Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "100350",
+    "scheme_name": "ICICI Prudential Large & Mid Cap Fund - Institutional Option - I - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Large & Mid Cap"
+  },
+  {
+    "scheme_code": "100362",
+    "scheme_name": "ICICI Prudential Liquid Institutional Plus Fund - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "100546",
+    "scheme_name": "Franklin India Liquid Fund - Super Institutional Plan - Growth",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "100608",
+    "scheme_name": "Sundaram Medium Duration Fund (Formerly Known as Sundaram Medium Term Bond Fund) Institutional Plan - Growth",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": "Medium Duration"
+  },
+  {
+    "scheme_code": "100611",
+    "scheme_name": "Sundaram Medium Duration Fund (Formerly Known as Sundaram Medium Term Bond Fund) Institutional Plan -Growth",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": "Medium Duration"
+  },
+  {
+    "scheme_code": "100618",
+    "scheme_name": "Sundaram Money Fund Retail Plan - Growth",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "100723",
+    "scheme_name": "UTI MMF-Discontinued - Regular Plan -Growth",
+    "amc_name": "UTI Mutual Fund",
+    "category_name": "Money Market"
+  },
+  {
+    "scheme_code": "100781",
+    "scheme_name": "Sundaram Banking & PSU Fund (Formerly Known as Sundaram Banking and PSU Debt Fund) Retail Plan - Growth",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": "Banking & PSU"
+  },
+  {
+    "scheme_code": "100792",
+    "scheme_name": "Sundaram Corporate Bond Fund Institutional Plan - Growth",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": "Corporate Bond"
+  },
+  {
+    "scheme_code": "100830",
+    "scheme_name": "Kotak Liquid-Institutional Plan  (Growth)",
+    "amc_name": "Kotak Mahindra Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "100837",
+    "scheme_name": "Nippon India Liquid Fund - Retail Option - Growth Plan",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "100893",
+    "scheme_name": "Principal Cash Management-Liquid Option-Institutional - Growth Plan",
+    "amc_name": "Principal Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "101154",
+    "scheme_name": "BARODA INCOME FUND - Plan A - Growth Option",
+    "amc_name": "Baroda BNP Paribas Mutual Fund",
+    "category_name": "Medium to Long Duration"
+  },
+  {
+    "scheme_code": "101221",
+    "scheme_name": "ICICI Prudential Money Market Fund Retail Growth (erstwhile Cash Option)",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Money Market"
+  },
+  {
+    "scheme_code": "101231",
+    "scheme_name": "ICICI Prudential Short Term Fund-Institutional Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "101244",
+    "scheme_name": "Franklin India Short-Term Income Plan-Institutional Plan - Growth",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "101316",
+    "scheme_name": "Aditya Birla Sun Life Savings Fund-Retail Growth",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Ultra Short Duration"
+  },
+  {
+    "scheme_code": "101354",
+    "scheme_name": "Templeton Floating Rate Income Fund-Short Term Plan-Institutional Option - Growth",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Money Market"
+  },
+  {
+    "scheme_code": "101358",
+    "scheme_name": "Franklin India Money Market Fund - Institutional Option - Growth",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Money Market"
+  },
+  {
+    "scheme_code": "101362",
+    "scheme_name": "Canara Robeco Liquid Fund- INSTITUTIONAL-Growth",
+    "amc_name": "Canara Robeco Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "101365",
+    "scheme_name": "Canara Robeco Liquid Fund-Retail-Growth",
+    "amc_name": "Canara Robeco Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "101481",
+    "scheme_name": "HDFC Floating Rate Debt Fund - Retail Growth Option",
+    "amc_name": "HDFC Mutual Fund",
+    "category_name": "Floater Fund"
+  },
+  {
+    "scheme_code": "101643",
+    "scheme_name": "ICICI Prudential Long Term Bond Fund-Institutional Option-Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Long Duration"
+  },
+  {
+    "scheme_code": "101721",
+    "scheme_name": "DWS Insta Cash Plus Fund-Institutional Plan-Growth",
+    "amc_name": "Deutsche Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "101750",
+    "scheme_name": "ICICI Prudential Liquid Fund Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "101751",
+    "scheme_name": "ICICI Prudential Liquid Institutional Fund - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "101793",
+    "scheme_name": "ICICI Prudential Floating Interest Fund Plan B - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Floater Fund"
+  },
+  {
+    "scheme_code": "101795",
+    "scheme_name": "ICICI Prudential Floating Interest Fund Plan A - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Floater Fund"
+  },
+  {
+    "scheme_code": "101797",
+    "scheme_name": "ICICI Prudential Savings Fund Plan C - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Floater Fund"
+  },
+  {
+    "scheme_code": "101858",
+    "scheme_name": "Tata Liquid Retail Investment Plan - Growth",
+    "amc_name": "Tata Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "101912",
+    "scheme_name": "BARODA  HYBRID EQUITY FUND - Plan A - Growth Option",
+    "amc_name": "Baroda BNP Paribas Mutual Fund",
+    "category_name": "Aggressive Hybrid"
+  },
+  {
+    "scheme_code": "101969",
+    "scheme_name": "Birla Sun Life Floating Rate - Long Term - Retail - Growth",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Money Market"
+  },
+  {
+    "scheme_code": "101971",
+    "scheme_name": "Aditya Birla Sun Life Money Manager Fund - Retail Growth",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Money Market"
+  },
+  {
+    "scheme_code": "102009",
+    "scheme_name": "UTI Liquid Fund - Discontinued - Regular Plan -Growth",
+    "amc_name": "UTI Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "102512",
+    "scheme_name": "UTI - GILT FUND - Discontinued PF Plan - Growth Option",
+    "amc_name": "UTI Mutual Fund",
+    "category_name": "Gilt"
+  },
+  {
+    "scheme_code": "102540",
+    "scheme_name": "UTI Low Duration Fund - Discontinued Growth Option",
+    "amc_name": "UTI Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "102596",
+    "scheme_name": "ICICI Prudential Value Discovery Fund - Institutional Option - I - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Value/Contra"
+  },
+  {
+    "scheme_code": "102661",
+    "scheme_name": "BARODA CONSERVATIVE HYBRID FUND - Plan A - Growth Option",
+    "amc_name": "Baroda BNP Paribas Mutual Fund",
+    "category_name": "Conservative Hybrid"
+  },
+  {
+    "scheme_code": "102703",
+    "scheme_name": "Sundaram Money Fund Institutional Plan - Growth",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "102743",
+    "scheme_name": "ICICI Prudential Medium Term Bond Fund-Plan B-Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Medium Duration"
+  },
+  {
+    "scheme_code": "102745",
+    "scheme_name": "ICICI Prudential Medium Term Bond Fund-Plan C-Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Medium Duration"
+  },
+  {
+    "scheme_code": "103027",
+    "scheme_name": "ICICI Prudential Blended Plan A - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "103061",
+    "scheme_name": "ICICI Prudential Blended Plan B -  Growth Option - I",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "103063",
+    "scheme_name": "ICICI Prudential Blended Plan B Institutional Growth Option - II",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "103071",
+    "scheme_name": "Tata Mid Cap Fund Plan A- Growth",
+    "amc_name": "Tata Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "103172",
+    "scheme_name": "Birla Sun Life Basic Industries Fund-Plan B(Growth)",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "103176",
+    "scheme_name": "Aditya Birla Sun Life Banking & PSU Debt Fund - Retail Plan-Growth",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Banking & PSU"
+  },
+  {
+    "scheme_code": "103195",
+    "scheme_name": "Aditya Birla Sun Life Low Duration Fund - Institutional Plan - Growth",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "103277",
+    "scheme_name": "DSP Credit Risk Fund - Institutional Plan-Growth",
+    "amc_name": "DSP Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "103336",
+    "scheme_name": "Tata Contra Fund Plan A -  Growth",
+    "amc_name": "Tata Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "103659",
+    "scheme_name": "ICICI Prudential Fusion Fund - Institutional Option - I - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "103761",
+    "scheme_name": "Tata Equity Management Fund Plan A - Growth",
+    "amc_name": "Tata Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "104142",
+    "scheme_name": "DSP BlackRock Ultra Short Fund - Institutional Plan - Growth",
+    "amc_name": "DSP Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "104217",
+    "scheme_name": "Fidelity Flexi Bond Fund - Retail Plan Growth Option",
+    "amc_name": "Fidelity Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "104219",
+    "scheme_name": "Fidelity Flexi Bond Fund - Institutional Plan Growth Option",
+    "amc_name": "Fidelity Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "104479",
+    "scheme_name": "DSP MidCap Fund - Institutional Plan - Growth",
+    "amc_name": "DSP Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "104491",
+    "scheme_name": "Religare Invesco Liquid Fund - Institutional - Growth",
+    "amc_name": "Invesco Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "104493",
+    "scheme_name": "Fidelity Cash Fund - Retail Plan - Growth option",
+    "amc_name": "Fidelity Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "104496",
+    "scheme_name": "Fidelity Cash Fund - Super Institutional Plan - Growth Option",
+    "amc_name": "Fidelity Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "104497",
+    "scheme_name": "Fidelity Cash Fund - Institutional Plan - Growth Option",
+    "amc_name": "Fidelity Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "104684",
+    "scheme_name": "ICICI Prudential Equity - Arbitrage Fund-Institutional Growth Option",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Arbitrage"
+  },
+  {
+    "scheme_code": "105096",
+    "scheme_name": "ICICI Prudential Equity Opportunities Fund - Retail Growth Plan",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "105099",
+    "scheme_name": "ICICI Prudential Equity Opportunities Fund - Institutional Growth Plan",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "105189",
+    "scheme_name": "Invesco India Short Duration Fund - Plan B - Growth",
+    "amc_name": "Invesco Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "105207",
+    "scheme_name": "ING Treasury Advantage Fund - Institutional Growth Option",
+    "amc_name": "ING Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "105274",
+    "scheme_name": "SBI Liquid Fund - Institutional - Growth",
+    "amc_name": "SBI Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "105562",
+    "scheme_name": "Sundaram Low Duration Fund Institutional Plan - Growth",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "105564",
+    "scheme_name": "Sundaram Low Duration Fund Retail Plan - Growth",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "105602",
+    "scheme_name": "ICICI Prudential Infrastructure Fund - Institutional Option - I - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "105651",
+    "scheme_name": "ICICI Prudential Interval Fund - Monthly Interval Plan I - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "105654",
+    "scheme_name": "Templeton Floating Rate Income Fund -  Super Institutional Plan - Growth",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Money Market"
+  },
+  {
+    "scheme_code": "105710",
+    "scheme_name": "ICICI Prudential Interval Fund - Quarterly Interval Plan I - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "105869",
+    "scheme_name": "DSP Equity Opportunities Fund - Institutional Plan - Growth",
+    "amc_name": "DSP Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "105872",
+    "scheme_name": "DSP Top 100 Equity Fund - Institutional  Plan - Growth",
+    "amc_name": "DSP Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "105874",
+    "scheme_name": "DSP India T.I.G.E.R. Fund - Institutional Plan - Growth",
+    "amc_name": "DSP Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "105876",
+    "scheme_name": "DSP BlackRock Equity Fund - Institutional Plan - Growth",
+    "amc_name": "DSP Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "105908",
+    "scheme_name": "ICICI Prudential Interval Fund - Quarterly Interval Plan II - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106128",
+    "scheme_name": "Tata Corporate Bond Fund Retail Investment Plan Growth",
+    "amc_name": "Tata Mutual Fund",
+    "category_name": "Corporate Bond"
+  },
+  {
+    "scheme_code": "106142",
+    "scheme_name": "ICICI Prudential Interval Fund - Quarterly Interval Plan III - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106173",
+    "scheme_name": "Religare Invesco Active Income Fund - Plan B - Growth",
+    "amc_name": "Invesco Mutual Fund",
+    "category_name": "Corporate Bond"
+  },
+  {
+    "scheme_code": "106217",
+    "scheme_name": "SBI Short Horizon Debt Fund - Ultra Short Term Fund - Institutional Plan - Growth",
+    "amc_name": "SBI Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "106227",
+    "scheme_name": "SBI SHORT HORIZON DEBT FUND-SHORT TERM FUND - RETAIL - GROWTH",
+    "amc_name": "SBI Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "106237",
+    "scheme_name": "Reliance Top 200  Fund-Institutional Plan Growth Plan Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Large Cap"
+  },
+  {
+    "scheme_code": "106249",
+    "scheme_name": "Reliance Focused Large Cap  Fund Institutional Plan Growth Plan Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106253",
+    "scheme_name": "Nippon India Multi Cap Fund Institutional Plan Growth Plan Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Multi Cap"
+  },
+  {
+    "scheme_code": "106256",
+    "scheme_name": "Reliance Vision Fund Institutional Plan Growth Plan Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Large & Mid Cap"
+  },
+  {
+    "scheme_code": "106258",
+    "scheme_name": "Reliance Growth Fund Institutional Plan Growth Plan Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Mid Cap"
+  },
+  {
+    "scheme_code": "106292",
+    "scheme_name": "ICICI Prudential Interval Fund - Annual Interval Plan I - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106329",
+    "scheme_name": "Canara Robeco Ultra Short Term Fund - Retail Plan- Growth Option",
+    "amc_name": "Canara Robeco Mutual Fund",
+    "category_name": "Ultra Short Duration"
+  },
+  {
+    "scheme_code": "106330",
+    "scheme_name": "Canara Robeco Ultra Short Term Fund - Institutional Plan- Growth option",
+    "amc_name": "Canara Robeco Mutual Fund",
+    "category_name": "Ultra Short Duration"
+  },
+  {
+    "scheme_code": "106384",
+    "scheme_name": "UTI Short Duration Fund - Discontinued Regular Option -Growth Sub Option",
+    "amc_name": "UTI Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "106482",
+    "scheme_name": "Tata Indo-Global Infrastructure Fund Plan A - Growth",
+    "amc_name": "Tata Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106511",
+    "scheme_name": "PineBridge India Liquid Fund-Institutional Plan-Growth Option",
+    "amc_name": "PineBridge Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106514",
+    "scheme_name": "PineBridge India Liquid Fund-Retail Plan-Growth Option",
+    "amc_name": "PineBridge Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106521",
+    "scheme_name": "PineBridge India Total Return Bond Fund- Retail Plan-Growth Option",
+    "amc_name": "PineBridge Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106523",
+    "scheme_name": "PineBridge India Total Return Bond Fund- Institutional Plan-Growth Option",
+    "amc_name": "PineBridge Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106554",
+    "scheme_name": "SUNDARAM FIXED INCOME INTERVAL FUND QTRLY PLAN A REGULAR GROWTH",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106555",
+    "scheme_name": "SUNDARAM FIXED INCOME INTERVAL FUND QTRLY PLAN A INST  GROWTH",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106561",
+    "scheme_name": "JPMorgan India Liquid Fund - Retail Plan - Growth Option",
+    "amc_name": "JPMorgan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106564",
+    "scheme_name": "JPMorgan India Treasury Fund - Retail Plan - Growth Option",
+    "amc_name": "JPMorgan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106571",
+    "scheme_name": "Fidelity Ultra Short Term Debt Fund - Institutional Plan - Growth Option",
+    "amc_name": "Fidelity Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106574",
+    "scheme_name": "Fidelity Ultra Short Term Debt Fund - Retail Plan - Growth Option",
+    "amc_name": "Fidelity Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106578",
+    "scheme_name": "Fidelity Ultra Short Term Debt Fund - Super Institutional Plan - Growth Option",
+    "amc_name": "Fidelity Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106702",
+    "scheme_name": "SUNDARAM FIXED INCOME INTERVAL FUND QTRLY PLAN B REGULAR  GROWTH",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106703",
+    "scheme_name": "SUNDARAM FIXED INCOME INTERVAL FUND QTRLY PLAN B INST GROWTH",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106763",
+    "scheme_name": "ICICI Prudential Interval Fund - Annual Interval Plan II - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106775",
+    "scheme_name": "ICICI Prudential Interval Fund - Half Yearly Interval Plan I - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106777",
+    "scheme_name": "ICICI Prudential Interval Fund - Annual Interval Plan III - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106796",
+    "scheme_name": "HDFC ARBITRAGE FUND - Retail Growth Option",
+    "amc_name": "HDFC Mutual Fund",
+    "category_name": "Arbitrage"
+  },
+  {
+    "scheme_code": "106821",
+    "scheme_name": "ICICI Prudential Smallcap Fund - Institutional Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Small Cap"
+  },
+  {
+    "scheme_code": "106829",
+    "scheme_name": "ICICI Prudential Interval Fund II - Quarterly Interval Plan A - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106833",
+    "scheme_name": "ICICI Prudential Interval Fund - Annual Interval Plan IV - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106853",
+    "scheme_name": "ICICI Prudential Interval Fund - Half Yearly Interval Plan II - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106863",
+    "scheme_name": "DSP BlackRock Cash Manager Fund - Institutional Plan - Growth",
+    "amc_name": "DSP Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106876",
+    "scheme_name": "Aditya Birla Sun Life International Equity Fund - Plan B - Growth - Regular Plan",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Sectoral/Thematic"
+  },
+  {
+    "scheme_code": "106886",
+    "scheme_name": "ICICI Prudential Interval Fund II - Quarterly Interval Plan B - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "106976",
+    "scheme_name": "ICICI Prudential Interval Fund II - Quarterly Interval Plan C - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "107121",
+    "scheme_name": "Tata Fixed Income Portfolio Fund Scheme A1 Plan A - Growth",
+    "amc_name": "Tata Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "107123",
+    "scheme_name": "Tata Fixed Income Portfolio Fund Scheme A2 Plan A - Growth",
+    "amc_name": "Tata Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "107139",
+    "scheme_name": "ICICI Prudential Interval Fund II - Quarterly Interval Plan D - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "107247",
+    "scheme_name": "Franklin India Ultra Short Bond Fund - Retail - Growth",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Ultra Short Duration"
+  },
+  {
+    "scheme_code": "107248",
+    "scheme_name": "Franklin India Ultra Short Bond Fund - Institutional - Growth",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Ultra Short Duration"
+  },
+  {
+    "scheme_code": "107249",
+    "scheme_name": "Franklin India Ultra Short Bond Fund - Super Institutional - Growth",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Ultra Short Duration"
+  },
+  {
+    "scheme_code": "107310",
+    "scheme_name": "ICICI Prudential Interval Fund II - Quarterly Interval Plan F - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "107341",
+    "scheme_name": "ING Global Real Estate Fund - Retail Plan Growth Option",
+    "amc_name": "ING Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "107374",
+    "scheme_name": "ICICI Prudential Fusion Fund Series-III - Institutional Growth Plan",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "107376",
+    "scheme_name": "ICICI Prudential Fusion Fund Series-III - Retail Growth Plan",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "107406",
+    "scheme_name": "PineBridge Infrastructure & Economic Reform Fund - Institutional Plan-Growth",
+    "amc_name": "PineBridge Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "107475",
+    "scheme_name": "Religare Invesco GILT Fund - Long Duration Plan - Institutional-Growth",
+    "amc_name": "Invesco Mutual Fund",
+    "category_name": "Gilt"
+  },
+  {
+    "scheme_code": "107590",
+    "scheme_name": "Reliance Diversified Power Sector Fund Institutional Plan Growth Plan Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "107623",
+    "scheme_name": "Tata Growing Economies Infrastructure Fund Scheme A  Plan A - Growth",
+    "amc_name": "Tata Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "107625",
+    "scheme_name": "Tata Growing Economies Infrastructure Fund Scheme B Plan A - Growth",
+    "amc_name": "Tata Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "107659",
+    "scheme_name": "Mirae Asset Liquid Fund- Institutional Plan - Growth",
+    "amc_name": "Mirae Asset Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "107715",
+    "scheme_name": "PineBridge India Short Term Fund-Retail Plan-Growth Option",
+    "amc_name": "PineBridge Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "107999",
+    "scheme_name": "ING Global Real Estate Fund - Institutional Plan Growth Option",
+    "amc_name": "ING Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "108250",
+    "scheme_name": "Reliance Quant Plus Fund- Institutional Plan-Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "108305",
+    "scheme_name": "Sundaram Select Focus Institutional Plan - Growth",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": "Focused"
+  },
+  {
+    "scheme_code": "108467",
+    "scheme_name": "ICICI Prudential Bluechip Fund - Institutional Option - I - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Large Cap"
+  },
+  {
+    "scheme_code": "108625",
+    "scheme_name": "IDFC - SSIF - ST -Plan B - Growth",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "108659",
+    "scheme_name": "IDFC GSF-Provident Fund-Inst Plan B-Growth",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "108676",
+    "scheme_name": "IDFC-Money Manager Fund-Treasury Plan-Plan B - Growth",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "108717",
+    "scheme_name": "Bandhan Short Duration Fund - Plan C  - Growth",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "108778",
+    "scheme_name": "BANDHAN Liquid Fund-Plan A-Growth",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "108846",
+    "scheme_name": "BANDHAN Arbitrage Fund - Plan B - Growth",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": "Arbitrage"
+  },
+  {
+    "scheme_code": "109061",
+    "scheme_name": "Sundaram Financial Services Opportunities Fund Institutional Plan - Growth",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": "Sectoral/Thematic"
+  },
+  {
+    "scheme_code": "109175",
+    "scheme_name": "JPMorgan India Active Bond Fund - Retail Plan - Growth Option",
+    "amc_name": "JPMorgan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "109176",
+    "scheme_name": "JPMorgan India Active Bond Fund - Institutional Plan - Growth Option",
+    "amc_name": "JPMorgan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "109213",
+    "scheme_name": "Aditya Birla Sun Life Short Term Fund-Institutional Growth Plan",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "109256",
+    "scheme_name": "BANK OF INDIA Liquid Fund- Institutional Plan-Growth",
+    "amc_name": "Bank of India Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "109258",
+    "scheme_name": "BANK OF INDIA Liquid Fund- Super Institutional Plan-Growth",
+    "amc_name": "Bank of India Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "109265",
+    "scheme_name": "BANK OF INDIA Ultra Short Duration Fund- Institutional Plan- Growth",
+    "amc_name": "Bank of India Mutual Fund",
+    "category_name": "Ultra Short Duration"
+  },
+  {
+    "scheme_code": "109717",
+    "scheme_name": "Nippon India Gilt  Fund - Institutional Plan-Growth Plan -Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Gilt"
+  },
+  {
+    "scheme_code": "109742",
+    "scheme_name": "ICICI Prudential Bond Fund- Institutional Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Medium to Long Duration"
+  },
+  {
+    "scheme_code": "109854",
+    "scheme_name": "ICICI Prudential Interval Fund II Quarterly Interval Plan C - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "109940",
+    "scheme_name": "Edelweiss Liquid Fund - Retail Plan - Growth Option",
+    "amc_name": "Edelweiss Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "109945",
+    "scheme_name": "Edelweiss Liquid Fund - Institutional Plan - Growth Option",
+    "amc_name": "Edelweiss Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "109949",
+    "scheme_name": "Edelweiss Bond Fund - Retail Plan - Growth Option",
+    "amc_name": "Edelweiss Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110045",
+    "scheme_name": "ICICI Prudential Interval Fund V Monthly Interval Plan A - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110047",
+    "scheme_name": "ICICI Prudential Interval Fund V - Monthly Interval Plan A - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110145",
+    "scheme_name": "Canara Robeco Interval Scheme Series2 (Quarterly Plan2) - Retail Plan - Growth Option",
+    "amc_name": "Canara Robeco Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110150",
+    "scheme_name": "JPMorgan India Liquid Fund - Super Institutional Plan - Growth Option",
+    "amc_name": "JPMorgan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110156",
+    "scheme_name": "JPMorgan India Treasury Fund - Super Institutional Plan - Growth Option",
+    "amc_name": "JPMorgan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110252",
+    "scheme_name": "Reliance Banking & Financial Services Fund - Institutional Plan - Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110256",
+    "scheme_name": "Reliance Natural Resources Fund - Institutional Plan - Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110286",
+    "scheme_name": "Edelweiss Short Term Income Fund - Institutional Plan - Growth Option",
+    "amc_name": "Edelweiss Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110346",
+    "scheme_name": "ICICI Prudential Interval Fund IV Quarterly Interval Plan B - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110348",
+    "scheme_name": "ICICI Prudential Interval Fund IV - Quarterly Interval Plan B - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110411",
+    "scheme_name": "DSP World Gold Fund - Institutional Plan - Growth",
+    "amc_name": "DSP Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110481",
+    "scheme_name": "ICICI Prudential Interval Fund IV - Quarterly Interval Plan C - Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110663",
+    "scheme_name": "ICICI Prudential Interval Fund II Quarterly Interval Plan A - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110704",
+    "scheme_name": "DWS Gilt Fund - Institutional Plan - Growth",
+    "amc_name": "Deutsche Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110767",
+    "scheme_name": "Fortis Money Plus Fund-Institutional Plan-Growth Option",
+    "amc_name": "Fortis Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110831",
+    "scheme_name": "Fortis Short Term Income Fund-Institutional Plan-Growth Option",
+    "amc_name": "Fortis Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110834",
+    "scheme_name": "Fortis Short Term Income Fund-Institutional Plus Plan-Growth Option",
+    "amc_name": "Fortis Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110915",
+    "scheme_name": "Fortis Overnight Fund-Institutional Plan-Growth Option",
+    "amc_name": "Fortis Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "110920",
+    "scheme_name": "Fortis Overnight Fund-Institutional Plus Plan-Growth Option",
+    "amc_name": "Fortis Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111310",
+    "scheme_name": "Fortis Bond Fund - Institutional Plan -Growth Option",
+    "amc_name": "Fortis Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111316",
+    "scheme_name": "ICICI Prudential Interval Fund II Quarterly Interval Plan B - Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111339",
+    "scheme_name": "BANDHAN GSF - Constant Maturity Plan -Plan B Growth",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": "Gilt 10 Year Constant Duration"
+  },
+  {
+    "scheme_code": "111356",
+    "scheme_name": "ICICI Prudential Nifty Index Fund - Institutional Option I",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Index Fund"
+  },
+  {
+    "scheme_code": "111435",
+    "scheme_name": "Taurus Ultra Short Term Bond Fund - Retail Growth Option #",
+    "amc_name": "Taurus Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "111439",
+    "scheme_name": "Taurus Ultra Short Term Bond Fund - Institutional Growth",
+    "amc_name": "Taurus Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "111524",
+    "scheme_name": "BANDHAN Dynamic Bond Fund - Regular Plan B - Growth",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": "Dynamic Bond"
+  },
+  {
+    "scheme_code": "111529",
+    "scheme_name": "IDFC-SSIF-Investment Plan B- GROWTH",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111554",
+    "scheme_name": "DWS Premier Bond Fund - Institutional Plan - Growth",
+    "amc_name": "Deutsche Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111556",
+    "scheme_name": "DWS Short Maturity Fund - Institutional Plan - Growth",
+    "amc_name": "Deutsche Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111586",
+    "scheme_name": "BANK OF INDIA Short Term Income Fund-Institutional Plan- Growth",
+    "amc_name": "Bank of India Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "111681",
+    "scheme_name": "IDFC SSIF - MT (Plan B)Inst- Growth Plan",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111698",
+    "scheme_name": "Mirae Asset Gilt Fund Investment Plan - Institutional Growth",
+    "amc_name": "Mirae Asset Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111724",
+    "scheme_name": "Fortis Flexi Debt Fund-Regular Plan A - Growth Option",
+    "amc_name": "Fortis Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111739",
+    "scheme_name": "Fidelity Wealth Builder Fund - Plan C - Growth Option",
+    "amc_name": "Fidelity Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111741",
+    "scheme_name": "Fidelity Wealth Builder Fund - Plan A - Growth Option",
+    "amc_name": "Fidelity Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111742",
+    "scheme_name": "Fidelity Wealth Builder Fund - Plan B - Growth Option",
+    "amc_name": "Fidelity Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111748",
+    "scheme_name": "Nippon India Low Duration Fund - Retail Plan - Growth Plan - Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "111762",
+    "scheme_name": "IDFC-SSIF-Investment Plan C- GROWTH",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111794",
+    "scheme_name": "ICICI Prudential Savings Fund Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "111804",
+    "scheme_name": "Aditya Birla Sun Life Medium Term Plan - Institutional - Growth Plan",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Medium Duration"
+  },
+  {
+    "scheme_code": "111863",
+    "scheme_name": "IDFC Core Equity Fund-Plan B- Growth",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": "Large & Mid Cap"
+  },
+  {
+    "scheme_code": "111865",
+    "scheme_name": "IDFC Imperial Equity Fund-Plan B - Growth",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111867",
+    "scheme_name": "IDFC Strategic Sector (50-50) Equity Fund-Plan B - GROWTH",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111879",
+    "scheme_name": "Canara Robeco Short Term Fund- Institutional Plan - Growth",
+    "amc_name": "Canara Robeco Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111935",
+    "scheme_name": "Edelweiss Large Cap Fund -Plan B - Growth option",
+    "amc_name": "Edelweiss Mutual Fund",
+    "category_name": "Large Cap"
+  },
+  {
+    "scheme_code": "111937",
+    "scheme_name": "Edelweiss Large Cap Fund -Plan C - Growth option",
+    "amc_name": "Edelweiss Mutual Fund",
+    "category_name": "Large Cap"
+  },
+  {
+    "scheme_code": "111941",
+    "scheme_name": "Sundaram Mid Cap Fund Institutional Plan - Growth",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": "Mid Cap"
+  },
+  {
+    "scheme_code": "111946",
+    "scheme_name": "Reliance Infrastructure Fund- Institutional Plan-Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111953",
+    "scheme_name": "Morgan Stanley Short Term Bond Fund- Institutional Plus- Growth",
+    "amc_name": "Morgan Stanley Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111955",
+    "scheme_name": "Aditya Birla Sun Life Infrastructure Fund-Plan B (Growth)",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111961",
+    "scheme_name": "Canara Robeco Dynamic Bond Fund - Institutional Plan - Growth",
+    "amc_name": "Canara Robeco Mutual Fund",
+    "category_name": "Dynamic Bond"
+  },
+  {
+    "scheme_code": "111968",
+    "scheme_name": "Morgan Stanley Active Bond Fund- Institutional Plus- Growth",
+    "amc_name": "Morgan Stanley Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "111972",
+    "scheme_name": "ICICI Prudential Corporate Bond Fund Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Corporate Bond"
+  },
+  {
+    "scheme_code": "112012",
+    "scheme_name": "Edelweiss Aggressive Hybrid Fund- Plan B-Growth Option",
+    "amc_name": "Edelweiss Mutual Fund",
+    "category_name": "Aggressive Hybrid"
+  },
+  {
+    "scheme_code": "112021",
+    "scheme_name": "Mirae Asset Short Term Bond Fund - Institutional - Growth Option",
+    "amc_name": "Mirae Asset Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "112029",
+    "scheme_name": "Baroda Treasury Advantage Fund- Plan A- Growth Option",
+    "amc_name": "Baroda BNP Paribas Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "112040",
+    "scheme_name": "Shinsei Liquid Fund - Retail - Growth",
+    "amc_name": "Shinsei Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "112041",
+    "scheme_name": "Shinsei Liquid Fund - Institutional - Growth",
+    "amc_name": "Shinsei Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "112064",
+    "scheme_name": "Sundaram Small Cap Fund Institutional Plan - Growth",
+    "amc_name": "Sundaram Mutual Fund",
+    "category_name": "Small Cap"
+  },
+  {
+    "scheme_code": "112069",
+    "scheme_name": "IDFC Equity Fund -Plan B-Growth",
+    "amc_name": "Bandhan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "112079",
+    "scheme_name": "Reliance Regular Savings Fund-DEBT OPTION- Institutional Plan-Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Value/Contra"
+  },
+  {
+    "scheme_code": "112083",
+    "scheme_name": "UTI Ultra Short Duration Fund - Discontinued - INSTN GROWTH OPTION",
+    "amc_name": "UTI Mutual Fund",
+    "category_name": "Ultra Short Duration"
+  },
+  {
+    "scheme_code": "112110",
+    "scheme_name": "Edelweiss Multi-Asset Allocation Fund- Plan C-Growth Option",
+    "amc_name": "Edelweiss Mutual Fund",
+    "category_name": "Aggressive Hybrid"
+  },
+  {
+    "scheme_code": "112114",
+    "scheme_name": "Aditya Birla Sun Life Large Cap Fund-Plan B (Growth)",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Large Cap"
+  },
+  {
+    "scheme_code": "112116",
+    "scheme_name": "Aditya Birla Sun Life MIDCAP Fund-Plan B (Growth)",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Mid Cap"
+  },
+  {
+    "scheme_code": "112128",
+    "scheme_name": "DSP World Energy Fund - Institutional Plan - Growth",
+    "amc_name": "DSP Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "112150",
+    "scheme_name": "Canara Robeco Consumer Trends Fund - Institutional Plan - Growth Option",
+    "amc_name": "Canara Robeco Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "112314",
+    "scheme_name": "Baroda Pioneer PSU Bond Fund - Plan A - Growth Option",
+    "amc_name": "Baroda BNP Paribas Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "112348",
+    "scheme_name": "DSP World Mining Fund - Institutional Plan - Growth",
+    "amc_name": "DSP Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "112640",
+    "scheme_name": "Navi Liquid Fund-Institutional Plan-Growth",
+    "amc_name": "Navi Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "112644",
+    "scheme_name": "Navi Liquid Fund-Retail Plan-Growth",
+    "amc_name": "Navi Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "112654",
+    "scheme_name": "Navi Ultra Short Term Fund - Institutional Plan-Growth",
+    "amc_name": "Navi Mutual Fund",
+    "category_name": "Ultra Short Duration"
+  },
+  {
+    "scheme_code": "112656",
+    "scheme_name": "Navi Ultra Short Term Fund - Retail Plan-Growth",
+    "amc_name": "Navi Mutual Fund",
+    "category_name": "Ultra Short Duration"
+  },
+  {
+    "scheme_code": "112713",
+    "scheme_name": "Axis Liquid Fund - Retail Plan - Growth Option",
+    "amc_name": "Axis Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "112717",
+    "scheme_name": "Axis Treasury Advantage Fund - Retail Plan - Growth Option",
+    "amc_name": "Axis Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "112721",
+    "scheme_name": "Axis Short Duration Fund - Retail Plan - Growth Option",
+    "amc_name": "Axis Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "112939",
+    "scheme_name": "Nippon India Credit Risk Fund  - Institutional Growth Plan",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Credit Risk"
+  },
+  {
+    "scheme_code": "112943",
+    "scheme_name": "Baroda Large cap Fund - Plan A - Growth Option",
+    "amc_name": "Baroda BNP Paribas Mutual Fund",
+    "category_name": "Large Cap"
+  },
+  {
+    "scheme_code": "113242",
+    "scheme_name": "ICICI Prudential Banking and PSU Debt Fund Retail Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Banking & PSU"
+  },
+  {
+    "scheme_code": "113327",
+    "scheme_name": "Baroda Mid-cap Fund- Plan A - Growth Option",
+    "amc_name": "Baroda BNP Paribas Mutual Fund",
+    "category_name": "Mid Cap"
+  },
+  {
+    "scheme_code": "113402",
+    "scheme_name": "ICICI Prudential Interval Fund - Half Yearly Interval Plan I - Institutional Growth",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "113479",
+    "scheme_name": "BNP PARIBAS LOW DURATION Fund-Institutional Plan-Growth Option",
+    "amc_name": "BNP Paribas Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "113526",
+    "scheme_name": "BNP PARIBAS Flexi Debt Fund-Regular Plan A - Growth Option",
+    "amc_name": "BNP Paribas Mutual Fund",
+    "category_name": "Dynamic Bond"
+  },
+  {
+    "scheme_code": "113550",
+    "scheme_name": "BNP PARIBAS Short Term  Fund-Institutional Plan-Growth Option",
+    "amc_name": "BNP Paribas Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "113553",
+    "scheme_name": "BNP PARIBAS Short Term Fund-Institutional Plus Plan-Growth Option",
+    "amc_name": "BNP Paribas Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "113634",
+    "scheme_name": "BNP PARIBAS LIQUID Fund-Institutional Plan-Growth Option",
+    "amc_name": "BNP Paribas Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "114101",
+    "scheme_name": "BNP PARIBAS Corporate Bond Fund - Institutional Plan -Growth Option",
+    "amc_name": "BNP Paribas Mutual Fund",
+    "category_name": "Corporate Bond"
+  },
+  {
+    "scheme_code": "114515",
+    "scheme_name": "Daiwa Liquid Fund - Institutional - Growth",
+    "amc_name": "Daiwa Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "115269",
+    "scheme_name": "ICICI Prudential Multi-Asset Fund- Institutional Growth Option",
+    "amc_name": "ICICI Prudential Mutual Fund",
+    "category_name": "Multi Asset Allocation"
+  },
+  {
+    "scheme_code": "116697",
+    "scheme_name": "Morgan Stanley Multi Asset Fund- Plan A- Regular- Growth",
+    "amc_name": "Morgan Stanley Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "116698",
+    "scheme_name": "Morgan Stanley Multi Asset Fund- Plan B- Regular Growth",
+    "amc_name": "Morgan Stanley Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "117631",
+    "scheme_name": "Baroda Dynamic Bond Fund - Plan A - Growth Option",
+    "amc_name": "Baroda BNP Paribas Mutual Fund",
+    "category_name": "Dynamic Bond"
+  },
+  {
+    "scheme_code": "118051",
+    "scheme_name": "L&T Flexi Bond Fund - Retail Plan Growth Option",
+    "amc_name": "L&T Mutual Fund",
+    "category_name": "Dynamic Bond"
+  },
+  {
+    "scheme_code": "118055",
+    "scheme_name": "L&T Cash Fund - Retail Plan - Growth option",
+    "amc_name": "L&T Mutual Fund",
+    "category_name": "Overnight Fund"
+  },
+  {
+    "scheme_code": "118059",
+    "scheme_name": "L&T Cash Fund - Institutional Plan - Growth Option",
+    "amc_name": "L&T Mutual Fund",
+    "category_name": "Overnight Fund"
+  },
+  {
+    "scheme_code": "118071",
+    "scheme_name": "L&T Banking and PSU Debt Fund - Institutional Plan - Growth Option",
+    "amc_name": "L&T Mutual Fund",
+    "category_name": "Banking & PSU"
+  },
+  {
+    "scheme_code": "118074",
+    "scheme_name": "L&T Banking and PSU Debt Fund - Retail Plan - Growth Option",
+    "amc_name": "L&T Mutual Fund",
+    "category_name": "Banking & PSU"
+  },
+  {
+    "scheme_code": "118910",
+    "scheme_name": "HSBC Cash Fund - Institutional Plan - Growth",
+    "amc_name": "HSBC Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "122650",
+    "scheme_name": "Aditya Birla Sun Life Floating Rate Fund-Retail Plan-Growth",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Floater Fund"
+  },
+  {
+    "scheme_code": "132005",
+    "scheme_name": "Aditya Birla Sun Life Global Excellence Equity Fund Of Fund- Retail Plan - Regular Plan - Growth Option",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "FoF Overseas"
+  },
+  {
+    "scheme_code": "133770",
+    "scheme_name": "Kotak Coporate Bond Fund- Retail Plan-Growth Option",
+    "amc_name": "Kotak Mahindra Mutual Fund",
+    "category_name": "Corporate Bond"
+  },
+  {
+    "scheme_code": "133772",
+    "scheme_name": "Kotak Corporate Bond Fund- Institutional Plan-Growth Option",
+    "amc_name": "Kotak Mahindra Mutual Fund",
+    "category_name": "Corporate Bond"
+  },
+  {
+    "scheme_code": "133802",
+    "scheme_name": "Kotak Low Duration Fund-Retail Plan-Growth Option",
+    "amc_name": "Kotak Mahindra Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "134044",
+    "scheme_name": "Baroda ELSS 96 Plan A -Growth Option",
+    "amc_name": "Baroda BNP Paribas Mutual Fund",
+    "category_name": "ELSS"
+  },
+  {
+    "scheme_code": "135450",
+    "scheme_name": "JPMorgan India Treasury Fund - Segregated Asset - Growth Option",
+    "amc_name": "JPMorgan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "135451",
+    "scheme_name": "JPMorgan India Short Term Income Fund - Segregated Asset - Growth Option",
+    "amc_name": "JPMorgan Mutual Fund",
+    "category_name": null
+  },
+  {
+    "scheme_code": "138257",
+    "scheme_name": "PGIM India Short Maturity Fund - Institutional Plan - Growth",
+    "amc_name": "PGIM India Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "138282",
+    "scheme_name": "PGIM India Insta Cash Fund-Institutional Plan-Growth",
+    "amc_name": "PGIM India Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "139560",
+    "scheme_name": "BNP PARIBAS LIQUID FUND SPECIAL UNCLAIMED RED 36A-- GROWTH OPTION",
+    "amc_name": "BNP Paribas Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "139561",
+    "scheme_name": "BNP PARIBAS LIQUID FUND SPECIAL UNCLAIMED DIV 36B -- GROWTH OPTION",
+    "amc_name": "BNP Paribas Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "139562",
+    "scheme_name": "BNP PARIBAS LIQUID FUND SPECIAL UNCLAIMED DIV 36A -- GROWTH OPTION",
+    "amc_name": "BNP Paribas Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "139563",
+    "scheme_name": "BNP PARIBAS LIQUID FUND SPECIAL UNCLAIMED RED 36B -- GROWTH OPTION",
+    "amc_name": "BNP Paribas Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "139617",
+    "scheme_name": "Taurus Unclaimed Redemption - Growth",
+    "amc_name": "Taurus Mutual Fund",
+    "category_name": "Money Market"
+  },
+  {
+    "scheme_code": "139618",
+    "scheme_name": "Taurus Investor Education Pool - Unclaimed Redemption - Growth",
+    "amc_name": "Taurus Mutual Fund",
+    "category_name": "Money Market"
+  },
+  {
+    "scheme_code": "139889",
+    "scheme_name": "Franklin India Liquid Fund - Unclaimed Redemption Plan - Growth",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "139891",
+    "scheme_name": "Franklin India Liquid Fund - Unclaimed Redemption Investor Education Plan - Growth",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "140176",
+    "scheme_name": "Edelweiss Liquid Fund - Retail Plan - Growth Option",
+    "amc_name": "Edelweiss Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "140201",
+    "scheme_name": "Edelweiss Low Duration Fund - Retail Plan - Growth Option",
+    "amc_name": "Edelweiss Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "140230",
+    "scheme_name": "Edelweiss Money Market Fund - Institutional Plan - Growth Option",
+    "amc_name": "Edelweiss Mutual Fund",
+    "category_name": "Money Market"
+  },
+  {
+    "scheme_code": "147384",
+    "scheme_name": "Tata Medium Term Fund -Regular Plan - Growth (Segregated Portfolio 1)",
+    "amc_name": "Tata Mutual Fund",
+    "category_name": "Medium Duration"
+  },
+  {
+    "scheme_code": "147392",
+    "scheme_name": "Tata Corporate Bond Fund -Regular Plan-Growth(Segregated Portfolio 1)",
+    "amc_name": "Tata Mutual Fund",
+    "category_name": "Corporate Bond"
+  },
+  {
+    "scheme_code": "147399",
+    "scheme_name": "Tata Treasury Advantage Fund-Regular Plan - Growth Option (Segregated Portfolio 1)",
+    "amc_name": "Tata Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "147650",
+    "scheme_name": "UTI - Credit Risk Fund (Segregated - 13092019) - Regular Plan - Growth Option",
+    "amc_name": "UTI Mutual Fund",
+    "category_name": "Credit Risk"
+  },
+  {
+    "scheme_code": "147674",
+    "scheme_name": "Nippon India Ultra Short Duration Fund - Segregated Portfolio 1 - Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Ultra Short Duration"
+  },
+  {
+    "scheme_code": "147685",
+    "scheme_name": "Nippon India Aggressive Hybrid Fund - Segregated Portfolio 1 - Growth Plan",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Aggressive Hybrid"
+  },
+  {
+    "scheme_code": "147700",
+    "scheme_name": "Nippon India Equity Savings Fund - Segregated Portfolio 1 - Growth Plan - Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Equity Savings"
+  },
+  {
+    "scheme_code": "147798",
+    "scheme_name": "Aditya Birla Sun Life Credit Risk Fund- Segregated Portfolio 1-Regular Plan- Growth",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Credit Risk"
+  },
+  {
+    "scheme_code": "147804",
+    "scheme_name": "Aditya Birla Sun Life Dynamic Bond Fund- Segregated Portfolio 1- Growth - Regular Plan",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Dynamic Bond"
+  },
+  {
+    "scheme_code": "147807",
+    "scheme_name": "Aditya Birla Sun Life Dynamic Bond Fund-Segregated Portfolio 1- Discipline Advantage Plan- Growth",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Dynamic Bond"
+  },
+  {
+    "scheme_code": "147820",
+    "scheme_name": "Aditya Birla Sun Life Medium term Plan- Segregated Portfolio 1- Growth- Regular Plan",
+    "amc_name": "Aditya Birla Sun Life Mutual Fund",
+    "category_name": "Medium Duration"
+  },
+  {
+    "scheme_code": "147954",
+    "scheme_name": "Franklin India Credit Risk Fund- Segregated Portfolio 1- 8.25% Vodafone Idea Ltd-10JUL20-Growth Plan",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Credit Risk"
+  },
+  {
+    "scheme_code": "147961",
+    "scheme_name": "Franklin India Credit Risk Fund- Segregated Portfolio 2- 10.90% Vodafone Idea Ltd 02Sep2023-Growth Plan",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Credit Risk"
+  },
+  {
+    "scheme_code": "147962",
+    "scheme_name": "Franklin India Income Opportunities Fund- Segregated Portfolio 1- 8.25% Vodafone Idea Ltd-10JUL20-Growth Plan",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Medium Duration"
+  },
+  {
+    "scheme_code": "147968",
+    "scheme_name": "Franklin India Income Opportunities Fund- Segregated Portfolio 2- 10.90% Vodafone Idea Ltd 02Sep2023-Growth Plan",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Medium Duration"
+  },
+  {
+    "scheme_code": "147970",
+    "scheme_name": "Franklin India Ultra Short Bond Fund- Super Institutional Plan-Segregated Portfolio 1- 8.25% Vodafone Idea Ltd-10JUL20-Growth Option",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Ultra Short Duration"
+  },
+  {
+    "scheme_code": "147976",
+    "scheme_name": "Franklin India Ultra Short Bond Fund- Institutional Plan-Segregated Portfolio 1- 8.25% Vodafone Idea Ltd-10JUL20-Growth Option",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Ultra Short Duration"
+  },
+  {
+    "scheme_code": "147979",
+    "scheme_name": "Franklin India Ultra Short Bond Fund- Retail Plan-Segregated Portfolio 1- 8.25% Vodafone Idea Ltd-10JUL20-Growth Option",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Ultra Short Duration"
+  },
+  {
+    "scheme_code": "147981",
+    "scheme_name": "Franklin India Dynamic Accrual Fund- Segregated Portfolio 1- 8.25% Vodafone Idea Ltd-10JUL20-Growth Plan",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Dynamic Bond"
+  },
+  {
+    "scheme_code": "147987",
+    "scheme_name": "Franklin India Dynamic Accrual Fund- Segregated Portfolio 2- 10.90% Vodafone Idea Ltd 02Sep2023-Growth Plan",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Dynamic Bond"
+  },
+  {
+    "scheme_code": "147994",
+    "scheme_name": "Franklin India Low Duration Fund- Segregated Portfolio 1- 8.25% Vodafone Idea Ltd-10JUL20-Growth Plan",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "148000",
+    "scheme_name": "Franklin India Low Duration Fund- Segregated Portfolio 2- 10.90% Vodafone Idea Ltd 02Sep2023-Growth Plan",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Low Duration"
+  },
+  {
+    "scheme_code": "148001",
+    "scheme_name": "Franklin India Short-Term Income Plan- Retail Plan-Segregated Portfolio 1- 8.25% Vodafone Idea Ltd-10JUL20-Growth Option",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "148008",
+    "scheme_name": "Franklin India Short term Income Plan-Institutional Plan- Segregated Portfolio 1- 8.25% Vodafone Idea Ltd-10JUL20-Growth Option",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "148010",
+    "scheme_name": "Franklin India Short term Income Plan- Retail Plan- Segregated Portfolio 2- 10.90% Vodafone Idea Ltd 02Sep2023-Growth Option",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "148013",
+    "scheme_name": "Franklin India Short term Income Plan- Institutional Plan- Segregated Portfolio 2- 10.90% Vodafone Idea Ltd 02Sep2023-Growth Option",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Short Duration"
+  },
+  {
+    "scheme_code": "148083",
+    "scheme_name": "Nippon India Medium Duration Fund - Segregated Portfolio 1 - Growth Option",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Medium Duration"
+  },
+  {
+    "scheme_code": "148085",
+    "scheme_name": "UTI - Bond Fund ( Segregated - 17022020) - Regular Plan - Growth Option",
+    "amc_name": "UTI Mutual Fund",
+    "category_name": "Corporate Bond"
+  },
+  {
+    "scheme_code": "148094",
+    "scheme_name": "Nippon India Credit Risk Fund - Segregated Portfolio 1 - Growth Plan",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Credit Risk"
+  },
+  {
+    "scheme_code": "148100",
+    "scheme_name": "Nippon India Credit Risk Fund - Segregated Portfolio 1 - Institutional Growth Plan",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Credit Risk"
+  },
+  {
+    "scheme_code": "148105",
+    "scheme_name": "UTI - Regular Saving Fund (Segregated - 17022020) - Regular Plan - Growth Option",
+    "amc_name": "UTI Mutual Fund",
+    "category_name": "Conservative Hybrid"
+  },
+  {
+    "scheme_code": "148117",
+    "scheme_name": "UTI - Dynamic Bond Fund (Segregated - 17022020) - Regular Plan - Growth Option",
+    "amc_name": "UTI Mutual Fund",
+    "category_name": "Dynamic Bond"
+  },
+  {
+    "scheme_code": "148138",
+    "scheme_name": "UTI - Medium Term Fund (Segregated - 17022020) - Regular Plan - Growth Option",
+    "amc_name": "UTI Mutual Fund",
+    "category_name": "Medium Duration"
+  },
+  {
+    "scheme_code": "148141",
+    "scheme_name": "Nippon India Conservative Hybrid  Fund - Segregated Portfolio 1 - Growth Plan",
+    "amc_name": "Nippon India Mutual Fund",
+    "category_name": "Conservative Hybrid"
+  },
+  {
+    "scheme_code": "148146",
+    "scheme_name": "UTI - Credit Risk Fund (Segregated - 17022020) - Regular Plan - Growth Option",
+    "amc_name": "UTI Mutual Fund",
+    "category_name": "Credit Risk"
+  },
+  {
+    "scheme_code": "148297",
+    "scheme_name": "Franklin India Conservative Hybrid Fund - Segregated Portfolio 1 (10.25% Yes bank Ltd CO 05Mar20) - Growth Plan",
+    "amc_name": "Franklin Templeton Mutual Fund",
+    "category_name": "Conservative Hybrid"
+  },
+  {
+    "scheme_code": "148425",
+    "scheme_name": "UTI - Credit Risk Fund (Segregated - 07072020) - Regular Plan - Growth Option",
+    "amc_name": "UTI Mutual Fund",
+    "category_name": "Credit Risk"
+  },
+  {
+    "scheme_code": "148433",
+    "scheme_name": "UTI - Medium Term Fund (Segregated - 07072020) - Regular Plan - Growth Option",
+    "amc_name": "UTI Mutual Fund",
+    "category_name": "Medium Duration"
+  },
+  {
+    "scheme_code": "148511",
+    "scheme_name": "quant Liquid Fund-Unclaimed Redemption Investor Education Plan-Growth Option",
+    "amc_name": "quant Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "148512",
+    "scheme_name": "quant Liquid Fund-Unclaimed Redemption Plan-Growth Option",
+    "amc_name": "quant Mutual Fund",
+    "category_name": "Liquid Fund"
+  },
+  {
+    "scheme_code": "154070",
+    "scheme_name": "JioBlackRock Overnight Fund - Unclaimed Redemption - Upto 3 years - Growth Option",
+    "amc_name": "Jio BlackRock Mutual Fund",
+    "category_name": "Overnight Fund"
+  }
+]

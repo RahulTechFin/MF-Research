@@ -73,7 +73,7 @@ export default function CategorySnapshot({ selectedCategories, onToggleCategory 
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody key={view} className="rows-enter">
                 {grouped.map(({ ac, rows }) => (
                   <Fragment key={ac}>
                     {/* Asset class header row */}

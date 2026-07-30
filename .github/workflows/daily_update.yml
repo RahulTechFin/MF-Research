@@ -1,5 +1,10 @@
 name: Daily Data Update
 
+# Pulls the latest NAVs from api.mfapi.in, runs the calculation engine inside
+# the runner, publishes the ~6 MB JSON the dashboard reads, and throws the
+# database away. Nothing is stored between runs — no Release asset, no
+# committed database.
+
 on:
   schedule:
     # 23:45 IST = 18:15 UTC
@@ -8,14 +13,32 @@ on:
     - cron: '45 2 * * *'
   workflow_dispatch:
     inputs:
-      run_repair:
-        description: 'Run gap repair after fetch'
+      max_staleness:
+        description: 'Max age (days) of the newest NAV before the run aborts'
+        required: false
+        default: '5'
+      skip_indices:
+        description: 'Skip the Yahoo Finance index refresh'
         required: false
         default: 'false'
+
+concurrency:
+  group: daily-update
+  cancel-in-progress: false
+
+# The benchmark index history is pulled from Supabase Storage by
+# scripts/index_store (via build_db_from_api). Without these the run still
+# works — it falls back to the committed data/index_history.json.gz seed — but
+# it would miss whatever the Update Indices schedule published today.
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+  SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
 
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: write
 
@@ -34,42 +57,61 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Create data directory
-        run: mkdir -p data site/public/data
-
-      - name: Download database from GitHub Release
+      # No database download. The scheme universe lives in the committed
+      # catalogue (data/scheme_catalogue.json, ~777 KB); NAVs come from the API.
+      - name: Verify scheme catalogue is present
         run: |
-          gh release download database --pattern "mf_research.db" --dir data --clobber || echo "No database asset found, starting fresh"
+          test -f data/scheme_catalogue.json \
+            || { echo "::error::data/scheme_catalogue.json is missing — run scripts/export_catalogue.py and commit it"; exit 1; }
+          python -c "import json;d=json.load(open('data/scheme_catalogue.json'));print(f\"catalogue: {d['scheme_count']} schemes\")"
+
+      # Pick up newly launched funds. api.mfapi.in has no category information,
+      # so the universe comes from AMFI's own file, which carries the SEBI
+      # category in its section headers.
+      #
+      # continue-on-error is deliberate: the refresh is a nice-to-have, and an
+      # AMFI outage must not stop the NAV update. A failure here simply means
+      # today's run uses yesterday's catalogue.
+      #
+      # The merge is additive — funds are only ever added or updated, never
+      # dropped — and it aborts on its own if AMFI returns a suspiciously short
+      # file, so a bad upstream day cannot shrink the universe.
+      - name: Refresh scheme catalogue (new funds)
+        continue-on-error: true
+        run: python scripts/export_catalogue.py --refresh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTHONIOENCODING: utf-8
 
-      - name: Fetch daily NAV + index data
-        id: fetch
-        run: python scripts/fetch_daily.py
-        # Exit 1 = fetch failed → workflow fails → NO commit → yesterday's site stays live
-
-      - name: Run gap repair (if requested)
-        if: github.event.inputs.run_repair == 'true'
+      # Builds a temp DB, runs the engine, writes JSON, deletes the DB.
+      # Aborts before touching any JSON if the upstream data is bad or stale.
+      - name: Run daily pipeline (API -> engine -> JSON)
         run: |
-          python scripts/backfill_amfi.py --repair
-          python scripts/backfill_indices.py --synth
-
-      - name: Build all JSON outputs
-        run: python scripts/build_json.py
-
-      - name: Upload updated database to GitHub Release
-        run: |
-          gh release create database --notes "Database storage for daily pipeline" || true
-          gh release upload database data/mf_research.db --clobber
+          python scripts/daily_run.py \
+            --workers 12 \
+            --max-staleness "${{ github.event.inputs.max_staleness || '5' }}" \
+            ${{ github.event.inputs.skip_indices == 'true' && '--skip-indices' || '' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTHONIOENCODING: utf-8
 
-      - name: Commit and push updated data
+      - name: Confirm no database was left behind
+        run: |
+          if ls data/*.db >/dev/null 2>&1; then
+            echo "::warning::a .db file was left in data/ — it will not be committed"
+            ls -lh data/*.db
+          else
+            echo "No database stored. ✔"
+          fi
+
+      # The catalogue is committed alongside the JSON: without it, a fund added
+      # by the refresh step above would be rediscovered every single day and
+      # never persist.
+      - name: Commit and push updated JSON
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add site/public/data/
-          git diff --cached --quiet || git commit -m "chore: data update $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git add site/public/data/ data/scheme_catalogue.json
+          git diff --cached --quiet \
+            || git commit -m "chore: data update $(date -u '+%Y-%m-%d %H:%M UTC')"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

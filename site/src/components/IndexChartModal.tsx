@@ -22,7 +22,9 @@ const INDEX_META: Record<string, { gradient: [string, string]; color: string }> 
 
 const SERIES_COLORS = ['#22D3EE', '#F472B6', '#34D399', '#F59E0B', '#818CF8']
 
-interface IndexInfo { index_id: number; index_name: string }
+// history is optional: the live Supabase index files include it, the committed
+// indices.json fallback does not.
+interface IndexInfo { index_id: number; index_name: string; history?: [string, number][] }
 interface Props { initial: IndexInfo; allIndices: IndexInfo[]; onClose: () => void }
 interface SeriesData { id: number; name: string; data: [string, number][] }
 
@@ -80,9 +82,20 @@ export default function IndexChartModal({ initial, allIndices, onClose }: Props)
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  // Fetch series for an index id if not already loaded
+  // Series for an index, if not already loaded.
+  //
+  // The live Supabase files carry their own history, so the common case needs no
+  // request at all — the data arrived with the strip. Only the committed
+  // indices.json fallback lacks it, and then we fetch as before.
   const fetchSeries = useCallback((id: number, name: string) => {
     if (seriesMap[id]) return
+
+    const inline = allIndices.find(i => i.index_id === id)?.history
+    if (inline && inline.length) {
+      setSeriesMap(prev => ({ ...prev, [id]: { id, name, data: inline } }))
+      return
+    }
+
     setLoadingIds(prev => [...prev, id])
     fetch(`${import.meta.env.BASE_URL}data/index/${id}.json`)
       .then(r => r.json())
@@ -94,7 +107,7 @@ export default function IndexChartModal({ initial, allIndices, onClose }: Props)
         setLoadingIds(prev => prev.filter(x => x !== id))
       })
       .catch(() => setLoadingIds(prev => prev.filter(x => x !== id)))
-  }, [seriesMap])
+  }, [seriesMap, allIndices])
 
   // Fetch initial on mount
   useEffect(() => {

@@ -1,6 +1,14 @@
 // src/components/HeroHeader.tsx — Gradient hero header with logo, navigation, theme toggle, and status
 
+import { useState } from 'react'
 import { fmtDate } from '../utils/format'
+import { visibleTabs, CAN_UNLOCK } from '../config/profile'
+import { ADMIN_CONFIGURED } from '../hooks/useAdmin'
+import AdminUnlockModal from './AdminUnlockModal'
+
+// The build must both contain the admin sections and carry a valid password
+// verifier. Missing either, the logo is an ordinary logo again.
+const UNLOCKABLE = CAN_UNLOCK && ADMIN_CONFIGURED
 
 interface Props {
   asOf: string | null
@@ -8,28 +16,32 @@ interface Props {
   onChangeTab: (tab: string) => void
   theme: 'light' | 'dark'
   onChangeTheme: (theme: 'light' | 'dark') => void
+  isAdmin: boolean
+  onUnlock: (password: string) => Promise<boolean>
+  onLock: () => void
 }
 
-export default function HeroHeader({ asOf, activeTab, onChangeTab, theme, onChangeTheme }: Props) {
-  const tabs = [
-    { id: 'market-pulse', label: 'Market Pulse' },
-    { id: 'category',     label: 'Market Trends' },
-    { id: 'screener',     label: 'Fund Screener & Trend Finder' },
-    { id: 'quartile',     label: 'Quartile Ranking' },
-    { id: 'rolling',      label: 'Rolling & P2P' },
-    { id: 'risk',         label: 'Risk Lab 🔒' },
-    { id: 'blend',        label: 'Blend Studio' },
-  ]
+export default function HeroHeader({
+  asOf, activeTab, onChangeTab, theme, onChangeTheme,
+  isAdmin, onUnlock, onLock,
+}: Props) {
+  const tabs = visibleTabs(isAdmin)
+
+  // The dialog owns the password field, validation and error state.
+  const [showPrompt, setShowPrompt] = useState(false)
 
   return (
     <header className="hero-gradient fixed top-0 left-0 right-0 z-50 border-b" style={{ borderColor: 'var(--line)' }}>
       {/* Top row: Logo + Title + Controls */}
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-2">
 
-        {/* Left: Armstrong logo — fully visible on white pill */}
+        {/* Left: Armstrong logo — doubles as the unlabelled admin entry point.
+            Clicking it opens the password dialog; when already unlocked it
+            locks again, so there is no "Admin" button for the team to notice. */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <div
-            className="flex items-center justify-center rounded-md shrink-0 bg-white"
+            className="logo-button flex items-center justify-center rounded-md shrink-0 bg-white"
+            onClick={() => (isAdmin ? onLock() : UNLOCKABLE && setShowPrompt(true))}
             style={{
               padding: '2px 6px',
               height: 36,
@@ -82,6 +94,12 @@ export default function HeroHeader({ asOf, activeTab, onChangeTab, theme, onChan
           <span className="badge-internal hidden sm:inline-flex text-[9px]">🔒 INTERNAL</span>
         </div>
       </div>
+
+      <AdminUnlockModal
+        open={showPrompt}
+        onClose={() => setShowPrompt(false)}
+        onUnlock={onUnlock}
+      />
 
       {/* Bottom row: Nav tabs */}
       <nav className="max-w-screen-2xl mx-auto px-4 sm:px-6 pb-1 flex items-center gap-1 overflow-x-auto nav-tabs scrollbar-none">

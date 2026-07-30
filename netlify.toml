@@ -6,6 +6,25 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# ── Live Market Pulse indices, proxied from Supabase Storage ─────────────────
+# scripts/update_indices.py publishes one file per index to the public bucket
+# every weekday evening. Proxying rather than fetching cross-origin keeps it
+# same-origin, so no CORS and no key in the browser.
+#
+# The path is /live/indices/, NOT /data/index/. That matters: BlendStudio and
+# TrendFinder read /data/index/{id}.json for all 36 committed benchmarks, and
+# proxying that prefix would send their requests to a bucket holding only 8.
+#
+# ORDER MATTERS: Netlify evaluates redirects top-down, so this must stay above
+# the SPA catch-all or /* would swallow it.
+#
+# The bucket is public, so no key is involved. %20 is the space in the name.
+[[redirects]]
+  from   = "/live/indices/*"
+  to     = "https://qhxofgrntftnxqdhottd.supabase.co/storage/v1/object/public/Indicies%20Data/:splat"
+  status = 200
+  force  = true
+
 [[redirects]]
   from   = "/*"
   to     = "/index.html"

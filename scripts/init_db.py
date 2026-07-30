@@ -7,12 +7,19 @@ import sqlite3
 import os
 import sys
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "mf_research.db")
+_DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "mf_research.db")
+
+# MF_DB_PATH lets the pipeline point every consumer (engine, build_json) at a
+# throwaway database — e.g. one built from the API inside a CI runner and
+# deleted afterwards. Unset, behaviour is unchanged.
+DB_PATH = os.environ.get("MF_DB_PATH") or _DEFAULT_DB_PATH
 
 
-def get_conn():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+def get_conn(db_path: str | None = None):
+    path = db_path or os.environ.get("MF_DB_PATH") or _DEFAULT_DB_PATH
+    parent = os.path.dirname(os.path.abspath(path))
+    os.makedirs(parent, exist_ok=True)
+    conn = sqlite3.connect(path)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
@@ -178,6 +185,14 @@ CATEGORY_NORM_MAP = {
     "Value Fund":                   "Value/Contra",
     "Contra Fund":                  "Value/Contra",
     "Dividend Yield Fund":          "Dividend Yield",
+    # AMFI publishes "Sectoral/ Thematic" — WITHOUT a "Funds" suffix. The
+    # fallback in parse_amfi_text tests `map_key in raw_text`, so a key longer
+    # than what AMFI emits can never match: these three left 1,000 rows
+    # unmapped and Sectoral/Thematic completely empty in the dashboard.
+    "Sectoral/ Thematic":           "Sectoral/Thematic",
+    "Sectoral/Thematic":            "Sectoral/Thematic",
+    "Sectoral Fund":                "Sectoral/Thematic",
+    "Thematic Fund":                "Sectoral/Thematic",
     "Sectoral/ Thematic Funds":     "Sectoral/Thematic",
     "Sectoral/Thematic Funds":      "Sectoral/Thematic",
     # Hybrid
@@ -194,8 +209,12 @@ CATEGORY_NORM_MAP = {
     "Overnight Fund":                   "Overnight Fund",
     "Liquid Fund":                      "Liquid Fund",
     "Ultra Short Duration Fund":        "Ultra Short Duration",
+    # Pre-2018 AMFI names, still attached to older schemes in the archive.
+    "Ultra Short Term Fund":            "Ultra Short Duration",
+    "Short Term Fund":                  "Short Duration",
     "Low Duration Fund":                "Low Duration",
     "Money Market Fund":                "Money Market",
+    "Money Market":                     "Money Market",
     "Short Duration Fund":              "Short Duration",
     "Medium Duration Fund":             "Medium Duration",
     "Medium to Long Duration Fund":     "Medium to Long Duration",
@@ -205,8 +224,10 @@ CATEGORY_NORM_MAP = {
     "Corporate Bond Fund":              "Corporate Bond",
     "Credit Risk Fund":                 "Credit Risk",
     "Banking and PSU Fund":             "Banking & PSU",
+    "Banking and PSU Debt Fund":        "Banking & PSU",
     "Banking & PSU Debt Fund":          "Banking & PSU",
     "Gilt Fund":                        "Gilt",
+    "Gilt":                             "Gilt",
     "Gilt Fund with 10 year constant duration": "Gilt 10 Year Constant Duration",
     "Floater Fund":                     "Floater Fund",
     # Other
@@ -215,6 +236,10 @@ CATEGORY_NORM_MAP = {
     "Other ETFs":                       "ETF",
     "ETF":                              "ETF",
     "Gold ETF":                         "Gold ETF",
+    # AMFI's actual section header is the short "FoF Overseas" (185 rows);
+    # the two long-form spellings below never appear in the live file.
+    "FoF Overseas":                     "FoF Overseas",
+    "Fund of Funds investing overseas": "FoF Overseas",
     "Fund of Funds (Overseas)":         "FoF Overseas",
     "Fund of Fund - Overseas":          "FoF Overseas",
 }

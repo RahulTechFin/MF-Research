@@ -23,7 +23,7 @@ export default {
         loss:      '#F87171',
         // Quartile colors
         q1: '#16A34A',
-        q2: '#EAB308',
+        q2: '#edb91aff',
         q3: '#FB923C',
         q4: '#DC2626',
       },

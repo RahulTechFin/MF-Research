@@ -1,0 +1,5 @@
+# Dependencies for scripts/backup_gsheets.py only.
+# The daily pipeline does not need these — keep them out of requirements.txt
+# so the GitHub Actions run stays lean.
+gspread==6.1.4
+google-auth==2.35.0

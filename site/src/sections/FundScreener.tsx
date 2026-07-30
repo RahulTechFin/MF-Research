@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useMeta, useCategoryTable } from '../hooks/useData'
 import { fmtPct, heatmapClass, retColor, assetClassColor } from '../utils/format'
+import { ALL_SECTORS, SECTORAL_THEMATIC_SLUG, sectorOf, sectorOptions } from '../utils/sectors'
 import type { ViewType, AssetClass } from '../types'
 
 const VIEWS: { key: ViewType; label: string }[] = [
@@ -32,36 +33,6 @@ function formatPeriodHeader(pk: string): string {
     return `${q} ${y}`
   }
   return pk
-}
-
-const SECTORS = [
-  'All Sectors',
-  'Financial Services & Banking',
-  'Healthcare & Pharma',
-  'Technology & Telecom',
-  'Infrastructure & Realty',
-  'Consumption & FMCG',
-  'PSE & CPSE',
-  'MNC',
-  'Metal & Commodities',
-  'Energy & Utilities',
-  'Thematic - Other (Defence, Railways, Auto)',
-  'Other Sectoral / Thematic'
-]
-
-function getSectorOfFund(name: string): string {
-  const n = name.toLowerCase()
-  if (n.includes('bank') || n.includes('finan') || n.includes('fsi') || n.includes('pru bank')) return 'Financial Services & Banking'
-  if (n.includes('healthcare') || n.includes('pharma') || n.includes('health') || n.includes('medical') || n.includes('biotech')) return 'Healthcare & Pharma'
-  if (n.includes('tech') || n.includes('it ') || n.includes('digital') || n.includes('telecom') || n.includes('software') || n.includes('internet')) return 'Technology & Telecom'
-  if (n.includes('infra') || n.includes('realty') || n.includes('housing') || n.includes('real estate') || n.includes('construct')) return 'Infrastructure & Realty'
-  if (n.includes('consumption') || n.includes('fmcg') || n.includes('consumer') || n.includes('retail') || n.includes('brand')) return 'Consumption & FMCG'
-  if (n.includes('pse') || n.includes('psu') || n.includes('public sector')) return 'PSE & CPSE'
-  if (n.includes('mnc') || n.includes('multinational')) return 'MNC'
-  if (n.includes('metal') || n.includes('commodit') || n.includes('resource') || n.includes('material')) return 'Metal & Commodities'
-  if (n.includes('energy') || n.includes('power') || n.includes('utility') || n.includes('utilities')) return 'Energy & Utilities'
-  if (n.includes('defence') || n.includes('railway') || n.includes('transport') || n.includes('mobility') || n.includes('auto')) return 'Thematic - Other (Defence, Railways, Auto)'
-  return 'Other Sectoral / Thematic'
 }
 
 interface MoversProps {
@@ -122,7 +93,7 @@ function LeadersLaggards({ filteredFunds, categoryAvg }: MoversProps) {
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead><tr><th>#</th><th className="text-left">Fund</th><th className="ret-cell">Return</th><th className="ret-cell">vs Avg</th></tr></thead>
-              <tbody>
+              <tbody key={period} className="rows-enter">
                 {top10.map(r => (
                   <tr key={r.scheme_code}>
                     <td className="text-xs" style={{ color: 'var(--text-low)' }}>{r.rank}</td>
@@ -154,7 +125,7 @@ function LeadersLaggards({ filteredFunds, categoryAvg }: MoversProps) {
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead><tr><th>#</th><th className="text-left">Fund</th><th className="ret-cell">Return</th><th className="ret-cell">vs Avg</th></tr></thead>
-              <tbody>
+              <tbody key={period} className="rows-enter">
                 {bottom10.map(r => (
                   <tr key={r.scheme_code}>
                     <td className="text-xs" style={{ color: 'var(--text-low)' }}>{r.rank}</td>
@@ -192,7 +163,7 @@ export default function FundScreener({ selectedFunds, onToggleFund }: Props) {
   const [view, setView]               = useState<ViewType>('trailing')
   const [activeSlug, setActiveSlug]   = useState<string>('')
   const [amcMode, setAmcMode]         = useState(false)
-  const [selectedSector, setSelectedSector] = useState('All Sectors')
+  const [selectedSector, setSelectedSector] = useState<string>(ALL_SECTORS)
 
   const categories = (meta?.categories ?? []).filter(c => c.asset_class === activeAsset)
 
@@ -203,18 +174,21 @@ export default function FundScreener({ selectedFunds, onToggleFund }: Props) {
 
   // Reset sector sub-filter when active category slug changes
   useEffect(() => {
-    setSelectedSector('All Sectors')
+    setSelectedSector(ALL_SECTORS)
   }, [slug])
+
+  const isSectoral = slug === SECTORAL_THEMATIC_SLUG
+  const sectorOpts = isSectoral ? sectorOptions(tableData?.funds ?? []) : []
 
   // Filter sectoral/thematic funds if chosen
   const filteredFunds = tableData?.funds.filter(fund => {
-    if (slug !== 'sectoral-thematic' || selectedSector === 'All Sectors') return true
-    return getSectorOfFund(fund.scheme_name) === selectedSector
+    if (!isSectoral || selectedSector === ALL_SECTORS) return true
+    return sectorOf(fund) === selectedSector
   }) ?? []
 
   // Dynamic category average calculator based on sub-category selector
   const getCategoryAvgForPeriod = (pk: string): number | null => {
-    if (slug === 'sectoral-thematic' && selectedSector !== 'All Sectors') {
+    if (isSectoral && selectedSector !== ALL_SECTORS) {
       const vals = filteredFunds.map(f => f.returns[pk]).filter(v => v !== null) as number[]
       return vals.length > 0 ? (vals.reduce((a, b) => a + b, 0) / vals.length) : null
     }
@@ -255,8 +229,8 @@ export default function FundScreener({ selectedFunds, onToggleFund }: Props) {
       </div>
 
       {/* Sector Sub-filter dropdown for Sectoral/Thematic category */}
-      {slug === 'sectoral-thematic' && (
-        <div className="flex items-center gap-2 mb-4 bg-[var(--bg-card)] p-3 rounded-lg border border-[var(--line)]">
+      {isSectoral && (
+        <div className="flex items-center gap-2 mb-4 bg-[var(--bg-card)] p-3 rounded-lg border border-[var(--line)] flex-wrap">
           <span className="text-xs font-semibold" style={{ color: 'var(--text-mid)' }}>Filter by Sector:</span>
           <select
             value={selectedSector}
@@ -269,10 +243,13 @@ export default function FundScreener({ selectedFunds, onToggleFund }: Props) {
               outline: 'none',
             }}
           >
-            {SECTORS.map(sec => (
-              <option key={sec} value={sec}>{sec}</option>
+            {sectorOpts.map(({ sector, count }) => (
+              <option key={sector} value={sector}>{sector} ({count})</option>
             ))}
           </select>
+          <span className="text-[11px]" style={{ color: 'var(--text-low)' }}>
+            AMFI files every theme under one category — the sub-category is read from the scheme name.
+          </span>
         </div>
       )}
 
@@ -304,7 +281,7 @@ export default function FundScreener({ selectedFunds, onToggleFund }: Props) {
           <div className="overflow-x-auto">
             <div className="px-4 py-2 flex items-center justify-between border-b" style={{ borderColor: 'var(--line)', background: 'var(--bg-raised)' }}>
               <span className="font-semibold text-sm" style={{ color: assetClassColor(tableData.asset_class) }}>
-                {tableData.category_name} {slug === 'sectoral-thematic' && selectedSector !== 'All Sectors' && ` — ${selectedSector}`}
+                {tableData.category_name} {isSectoral && selectedSector !== ALL_SECTORS && ` — ${selectedSector}`}
               </span>
               <span className="text-xs" style={{ color: 'var(--text-low)' }}>
                 {filteredFunds.length} funds · Data as of {tableData.as_of}
@@ -321,7 +298,7 @@ export default function FundScreener({ selectedFunds, onToggleFund }: Props) {
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody key={`${activeSlug}-${view}`} className="rows-enter">
                 {filteredFunds.map(fund => (
                   <tr key={fund.scheme_code}>
                     {/* Checkbox column */}

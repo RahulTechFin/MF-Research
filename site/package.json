@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node scripts/prune_data.mjs dist admin",
+    "build:team": "tsc && vite build --mode team && node scripts/prune_data.mjs dist team",
     "preview": "vite preview"
   },
   "dependencies": {

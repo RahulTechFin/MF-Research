@@ -465,3 +465,237 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--accent-a);
 }
 
+
+/* ── Admin unlock modal ─────────────────────────────────────────────────────
+   Opened by clicking the Armstrong mark in the header. Styled to echo the
+   hero gradient so it reads as part of the product rather than a browser
+   prompt. Works on both themes; the card keeps the dark treatment in light
+   mode on purpose, matching the header it is launched from. */
+
+.admin-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(6, 11, 25, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: adminFadeIn 160ms ease-out;
+}
+
+@keyframes adminFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.admin-modal-card {
+  position: relative;
+  width: 100%;
+  max-width: 372px;
+  padding: 30px 28px 22px;
+  border-radius: 16px;
+  text-align: center;
+  background: linear-gradient(150deg, #101A33 0%, #16224A 55%, #1B3170 100%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(34, 211, 238, 0.10) inset;
+  animation: adminRise 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes adminRise {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+/* Wrong password — a short nudge rather than a jarring flash. */
+.admin-modal-shake { animation: adminShake 400ms ease-in-out; }
+
+@keyframes adminShake {
+  0%, 100%      { transform: translateX(0); }
+  18%, 54%      { transform: translateX(-7px); }
+  36%, 72%      { transform: translateX(7px); }
+  86%           { transform: translateX(-3px); }
+}
+
+.admin-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.admin-modal-close:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: #fff;
+}
+
+.admin-modal-badge {
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.32);
+}
+
+.admin-modal-logo {
+  max-width: 44px;
+  max-height: 32px;
+  object-fit: contain;
+  display: block;
+}
+
+.admin-modal-title {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+.admin-modal-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.admin-modal-form { margin-top: 20px; }
+
+.admin-modal-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  height: 42px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.admin-modal-field:focus-within {
+  border-color: rgba(34, 211, 238, 0.75);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.16);
+}
+.admin-modal-field.has-error {
+  border-color: rgba(248, 113, 113, 0.85);
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.14);
+}
+
+.admin-modal-field-icon { font-size: 13px; opacity: 0.7; }
+
+.admin-modal-field input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+}
+.admin-modal-field input::placeholder {
+  color: rgba(255, 255, 255, 0.38);
+  letter-spacing: normal;
+}
+
+/* Reserved height so the card does not jump when the message appears. */
+.admin-modal-error {
+  min-height: 17px;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: #FCA5A5;
+}
+
+.admin-modal-submit {
+  width: 100%;
+  height: 42px;
+  margin-top: 4px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 13.5px;
+  letter-spacing: 0.03em;
+  color: #06121F;
+  background: linear-gradient(100deg, #22D3EE 0%, #38BDF8 100%);
+  box-shadow: 0 6px 18px rgba(34, 211, 238, 0.26);
+  transition: transform 110ms ease, box-shadow 140ms ease, opacity 140ms ease;
+}
+.admin-modal-submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 9px 24px rgba(34, 211, 238, 0.36);
+}
+.admin-modal-submit:active:not(:disabled) { transform: translateY(0); }
+.admin-modal-submit:disabled { opacity: 0.42; cursor: not-allowed; box-shadow: none; }
+
+.admin-modal-foot {
+  margin-top: 16px;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.32);
+}
+
+/* The logo is the admin entry point, and must not look like one.
+   No pointer cursor, no hover state, no focus ring — it renders exactly as a
+   plain logo. Anyone who does not already know it is clickable never finds out.
+   `user-select: none` only stops the image being dragged or highlighted on the
+   double-click that a curious visitor might try. */
+.logo-button {
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-modal-backdrop,
+  .admin-modal-card,
+  .admin-modal-shake { animation: none; }
+}
+
+/* ── View transitions ───────────────────────────────────────────────────────
+   Deliberately restrained. An earlier version slid the content up 6px on every
+   tab change, which read as a jitter rather than a transition — the whole page
+   twitched each time. Opacity alone changes nothing about layout, so the eye
+   registers the swap without anything appearing to move. */
+
+@keyframes viewEnter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.view-enter { animation: viewEnter 220ms ease-out; }
+
+/* Rows-only refresh (category or period change) — slightly quicker, since the
+   surrounding header and controls stay put. */
+@keyframes rowsEnter {
+  from { opacity: 0.35; }
+  to   { opacity: 1; }
+}
+
+.rows-enter { animation: rowsEnter 160ms ease-out; }
+
+/* Quartile pills recolour when the ranking changes; ease it rather than snap. */
+.q-pill { transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .view-enter,
+  .rows-enter { animation: none; }
+  .q-pill { transition: none; }
+}

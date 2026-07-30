@@ -243,7 +243,7 @@ export default function RiskLab() {
                   <MetricHeader label="Score" metric="composite_score" />
                 </tr>
               </thead>
-              <tbody>
+              <tbody key={slug} className="rows-enter">
                 {[...riskData.funds]
                   .sort((a, b) => (b.composite_score ?? 0) - (a.composite_score ?? 0))
                   .map(fund => (

@@ -12,7 +12,10 @@ import QuartileRanking  from './sections/QuartileRanking'
 import RollingP2P       from './sections/RollingP2P'
 import RiskLab          from './sections/RiskLab'
 import BlendStudio      from './sections/BlendStudio'
+import Watchlist        from './sections/Watchlist'
 import { useMeta }      from './hooks/useData'
+import { useAdmin }     from './hooks/useAdmin'
+import { isEnabled, BUILD_SECTIONS, DEFAULT_TAB } from './config/profile'
 
 function StatusPage() {
   const { data: meta } = useMeta()
@@ -51,9 +54,19 @@ function StatusPage() {
 
 export default function App() {
   const { data: meta } = useMeta()
+  const { isAdmin, unlock, lock } = useAdmin()
 
-  // Routing and Theme state persisted in LocalStorage
-  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('mfrc_active_tab') || 'market-pulse')
+  // Routing and Theme state persisted in LocalStorage.
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = localStorage.getItem('mfrc_active_tab')
+    return saved && isEnabled(saved, false) ? saved : DEFAULT_TAB
+  })
+
+  // Locking while sitting on an admin tab would leave the page blank, so send
+  // the viewer back to a section they are still allowed to see.
+  useEffect(() => {
+    if (!isEnabled(activeTab, isAdmin)) setActiveTab(DEFAULT_TAB)
+  }, [isAdmin, activeTab])
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('mfrc_theme') as 'light' | 'dark') || 'dark')
   
   // Shared state for category comparison chart
@@ -86,6 +99,10 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('mfrc_active_tab', activeTab)
+    // Switching tabs while scrolled halfway down used to drop you into the
+    // middle of the next section. Jump — not smooth-scroll, which fights the
+    // fade and takes longer than the transition itself.
+    window.scrollTo({ top: 0, behavior: 'auto' })
   }, [activeTab])
 
   useEffect(() => {
@@ -112,15 +129,21 @@ export default function App() {
         onChangeTab={setActiveTab}
         theme={theme}
         onChangeTheme={setTheme}
+        isAdmin={isAdmin}
+        onUnlock={unlock}
+        onLock={lock}
       />
 
-      {/* Main page content area (offset by 120px to clear the fixed top bar) */}
-      <main className="pt-[120px] pb-12">
+      {/* Main page content area (offset by 120px to clear the fixed top bar).
+          The key makes React remount on a tab change, which replays the
+          .view-enter animation so switching sections fades in rather than
+          snapping. */}
+      <main key={activeTab} className="pt-[120px] pb-12 view-enter">
         {activeTab === 'market-pulse' && (
           <MarketPulse />
         )}
 
-        {activeTab === 'category' && (
+        {BUILD_SECTIONS.category && isEnabled('category', isAdmin) && activeTab === 'category' && (
           <>
             <MarketPulseBar />
             <CategorySnapshot
@@ -134,7 +157,7 @@ export default function App() {
           </>
         )}
 
-        {activeTab === 'screener' && (
+        {BUILD_SECTIONS.screener && isEnabled('screener', isAdmin) && activeTab === 'screener' && (
           <>
             <MarketPulseBar />
             <FundScreener
@@ -156,15 +179,22 @@ export default function App() {
           </>
         )}
 
-        {activeTab === 'rolling' && (
+        {activeTab === 'watchlist' && (
+          <>
+            <MarketPulseBar />
+            <Watchlist />
+          </>
+        )}
+
+        {BUILD_SECTIONS.rolling && isEnabled('rolling', isAdmin) && activeTab === 'rolling' && (
           <RollingP2P />
         )}
 
-        {activeTab === 'risk' && (
+        {BUILD_SECTIONS.risk && isEnabled('risk', isAdmin) && activeTab === 'risk' && (
           <RiskLab />
         )}
 
-        {activeTab === 'blend' && (
+        {BUILD_SECTIONS.blend && isEnabled('blend', isAdmin) && activeTab === 'blend' && (
           <BlendStudio />
         )}
       </main>

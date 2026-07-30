@@ -18,7 +18,6 @@ import sys
 import logging
 import argparse
 import sqlite3
-import time
 import requests
 from datetime import date, datetime, timedelta
 
@@ -42,78 +41,70 @@ log = logging.getLogger("backfill_indices")
 
 BACKFILL_START = "2010-01-01"
 
-# Create a session with browser User-Agent to bypass rate limit blocks
-session = requests.Session()
-session.headers.update({
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-})
+# One keep-alive session shared by all 31 tickers, rather than a fresh TCP+TLS
+# handshake each. Created lazily so importing this module costs nothing.
+_SESSION: requests.Session | None = None
+
+
+def _chart_session() -> requests.Session:
+    global _SESSION
+    if _SESSION is None:
+        from scripts.yahoo_chart import make_session
+        _SESSION = make_session()
+    return _SESSION
 
 def fetch_yahoo(ticker: str, start: str, end: str) -> pd.DataFrame | None:
     """
     Download daily closing prices from Yahoo Finance.
     Returns DataFrame with columns [date(str), close(float)] or None.
-    Attempts later start dates if the index did not exist in 2010.
+
+    HISTORY OF THIS FUNCTION — do not reinstate the old order.
+    Both paths it used to rely on are dead as of 2026-07:
+
+      * yf.download() (yfinance 0.2.54) answers every ticker with
+        YFRateLimitError('Too Many Requests'), and
+      * the /v7/finance/download CSV "fallback" hits an endpoint Yahoo retired,
+        so it could never have rescued the call.
+
+    Because daily_run.py treats a top-up failure as non-fatal — rightly, since
+    good NAV data should still publish — the run kept reporting success while
+    Market Pulse served closes that were three weeks old. Nothing was logged
+    loudly enough to notice.
+
+    scripts/yahoo_chart uses the v8 chart endpoint, which is not rate-limited
+    from the same IP that yf.download is blocked on, and which was verified
+    against 526 closes already in the database with zero mismatches.
+    yf.download is kept only as a last resort in case v8 is the one that breaks.
     """
-    # Start date fallback list
-    start_candidates = [start, "2016-01-01", "2018-01-01", "2020-01-01"]
-    
-    for s_date in start_candidates:
-        if s_date > start:
-            if s_date >= end:
-                continue
-            log.warning("    Retrying %s with later start date: %s", ticker, s_date)
-            
-        try:
-            # yfinance rate-limiting workaround: sleep before requesting
-            time.sleep(2.0)
-            df = yf.download(
-                ticker,
-                start=s_date,
-                end=end,
-                progress=False,
-                auto_adjust=True,
-                threads=False,
-                session=session
-            )
-            if df is not None and not df.empty:
-                # Handle MultiIndex columns if yfinance returns them
-                if isinstance(df.columns, pd.MultiIndex):
-                    df.columns = df.columns.get_level_values(0)
+    from scripts.yahoo_chart import fetch_daily_closes
 
-                df = df[["Close"]].copy()
-                df.index = pd.to_datetime(df.index)
-                df = df.dropna()
-                df.columns = ["close"]
-                df.index.name = "date"
-                df = df.reset_index()
-                df["date"] = df["date"].dt.strftime("%Y-%m-%d")
-                df["close"] = df["close"].astype(float).round(4)
-                return df
+    rows = fetch_daily_closes(ticker, start, end, session=_chart_session())
+    if rows:
+        return pd.DataFrame(rows, columns=["date", "close"])
+    if rows == []:
+        # Distinguish "no trading days in this window" (normal for a same-day
+        # re-run) from a fetch error, which returns None.
+        return pd.DataFrame(columns=["date", "close"])
 
-        except Exception as exc:
-            log.warning("    yf.download failed for %s: %s — trying direct CSV fallback", ticker, exc)
-            
-        # Try direct CSV download as fallback
-        try:
-            p1 = int(datetime.strptime(s_date, "%Y-%m-%d").timestamp())
-            p2 = int(datetime.strptime(end, "%Y-%m-%d").timestamp())
-            csv_url = f"https://query1.finance.yahoo.com/v7/finance/download/{ticker}?period1={p1}&period2={p2}&interval=1d&events=history&includeAdjustedClose=true"
-            time.sleep(1.0)
-            r = session.get(csv_url, timeout=15)
-            if r.status_code == 200:
-                import io
-                df = pd.read_csv(io.StringIO(r.text))
-                if not df.empty:
-                    df = df.rename(columns={"Date": "date", "Close": "close"})
-                    df = df[["date", "close"]].copy()
-                    df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
-                    df["close"] = df["close"].astype(float).round(4)
-                    return df
-            else:
-                log.warning("    Direct CSV HTTP %d for %s", r.status_code, ticker)
-        except Exception as direct_exc:
-            log.warning("    Direct CSV fallback failed for %s: %s", ticker, direct_exc)
-            
+    log.warning("    v8 chart API returned nothing for %s — trying legacy yf.download", ticker)
+    try:
+        df = yf.download(ticker, start=start, end=end, progress=False,
+                         auto_adjust=True, threads=False)
+        if df is not None and not df.empty:
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            df = df[["Close"]].copy()
+            df.index = pd.to_datetime(df.index)
+            df = df.dropna()
+            df.columns = ["close"]
+            df.index.name = "date"
+            df = df.reset_index()
+            df["date"] = df["date"].dt.strftime("%Y-%m-%d")
+            df["close"] = df["close"].astype(float).round(4)
+            return df
+    except Exception as exc:
+        log.warning("    legacy yf.download also failed for %s: %s", ticker, exc)
+
     log.error("  All download attempts failed for %s", ticker)
     return None
 

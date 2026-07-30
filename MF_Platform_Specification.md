@@ -18,7 +18,7 @@
 
 ## P1. What We Are Building
 
-**Project / Platform Name (FINAL): `ARMSTRONG MF RESEARCH CENTRE`**
+**Project / Platform Name (FINAL): `Mutual Fund Research Center`**
 — displayed as the wordmark in the gradient hero header, browser title, and all branding. Tagline under the wordmark: *"Mutual Fund Intelligence · Every NAV, Every Fund, Every Day"*.
 
 **Official Section Headings (FINAL — use these exact names in the UI):**

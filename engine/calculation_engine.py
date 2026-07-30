@@ -559,23 +559,67 @@ def common_start_date(series_list: list[list[tuple[str, float]]]) -> Optional[da
 
 # ── E9. Quartile Ranking ──────────────────────────────────────────────────────
 
+# Pools smaller than this keep the old ROUNDUP behaviour — see quartile().
+SMALL_POOL = 3
+
 def quartile(rank: int, n: int) -> Optional[int]:
     """
-    E9: Owner's Excel formula transcribed exactly.
-    =IFERROR( IF(rank <= ROUNDUP(N*0.25,0), 1,
-               IF(rank <= ROUNDUP(N*0.50,0), 2,
-               IF(rank <= ROUNDUP(N*0.75,0), 3, 4))), "-")
-    Python equivalent (must match Excel output exactly).
-    Returns 1–4 or None (displays '-').
+    E9: equal brackets of n//4, with any remainder given to the BOTTOM
+    quartiles — Q4 first, then Q3, then Q2. Q1 never takes a leftover.
+
+        n = 40  ->  Q1 10  Q2 10  Q3 10  Q4 10     (divides evenly)
+        n = 17  ->  Q1  4  Q2  4  Q3  4  Q4  5     (1 spare -> Q4)
+        n = 18  ->  Q1  4  Q2  4  Q3  5  Q4  5     (2 spare -> Q4, Q3)
+        n = 31  ->  Q1  7  Q2  8  Q3  8  Q4  8     (3 spare -> Q4, Q3, Q2)
+
+    THIS REPLACES the previous ROUNDUP transcription:
+        IF(rank <= ROUNDUP(N*0.25,0), 1, IF(rank <= ROUNDUP(N*0.50,0), 2, ...))
+    which handed spare funds to Q1 instead, so it read Q1 5 / Q2 4 / Q3 4 / Q4 4
+    at n = 17. The two agree only when n is a multiple of 4. Changed on the
+    owner's instruction: a spare fund should not be promoted into the top
+    bracket.
+
+    FEWER THAN 3 FUNDS keeps the old ROUNDUP behaviour, on the owner's
+    instruction. Bottom-loading a pool that small reads badly: the sole fund in a
+    sector would be Q4, and with two funds neither could be Q1. The old formula
+    puts them at the top instead (n = 1 -> Q1; n = 2 -> Q1 and Q3).
+
+        Note n = 3 uses the NEW rule, so its best fund lands in Q2, not Q1 —
+        "less than 3" as specified. Raise SMALL_POOL to 4 if a 3-fund sector
+        (Conglomerate today) should also keep a Q1.
+
+    Returns 1-4, or None when rank is None or n == 0 (displays '-').
     """
     if rank is None or n == 0:
         return None
-    if rank <= math.ceil(n * 0.25):
-        return 1
-    if rank <= math.ceil(n * 0.50):
-        return 2
-    if rank <= math.ceil(n * 0.75):
-        return 3
+
+    if n < SMALL_POOL:
+        # Previous transcription of the owner's Excel: ROUNDUP boundaries, which
+        # hand any spare fund to the TOP bracket.
+        if rank <= math.ceil(n * 0.25):
+            return 1
+        if rank <= math.ceil(n * 0.50):
+            return 2
+        if rank <= math.ceil(n * 0.75):
+            return 3
+        return 4
+
+    base, remainder = divmod(n, 4)
+    # Index 0 is Q1. A remainder of r fills the last r brackets, bottom-up.
+    sizes = [
+        base,
+        base + (1 if remainder >= 3 else 0),
+        base + (1 if remainder >= 2 else 0),
+        base + (1 if remainder >= 1 else 0),
+    ]
+
+    upper = 0
+    for q, size in enumerate(sizes, start=1):
+        upper += size
+        if rank <= upper:
+            return q
+    # rank > n: out of range for this pool. Treated as the bottom bracket rather
+    # than raising, matching the old formula's fall-through.
     return 4
 
 
