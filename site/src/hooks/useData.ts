@@ -32,20 +32,26 @@ export function useMeta()              { return useJson<import('../types').Meta>
 export function useGlance(view: string){ return useJson<import('../types').GlanceData>(`glance_${view}.json`) }
 
 /**
- * Market Pulse indices, read live from Supabase.
+ * Market Pulse indices — WHICHEVER SOURCE IS FRESHER.
  *
- * One file per index (see config/indices.ts), fetched in parallel and assembled
- * into the same IndicesData shape the committed indices.json used to provide —
- * so MarketPulseBar and MarketPulse did not have to change.
+ * Two sources publish the same 8 indices on different schedules:
  *
- * Two reasons this is worth the extra requests: each file already carries its
- * full history, so opening the chart needs no second fetch; and the files are
- * refreshed on their own schedule, so closes appear without a site rebuild.
- * Gzipped, the whole strip is ~80 KB.
+ *   live      /live/indices/{slug}.json  — proxied to Supabase, refreshed by
+ *             update_indices.yml on its own cron. No rebuild needed, and each
+ *             file carries its full history so opening the chart costs nothing.
+ *   committed data/indices.json          — written by the nightly NAV run and
+ *             deployed with the site.
  *
- * Falls back to the committed data/indices.json when the live path is
- * unavailable — which covers local `npm run dev` (no Netlify proxy) and a
- * Supabase outage. Without that, both would leave Market Pulse blank.
+ * BOTH are fetched and the newer `date` wins. An earlier version preferred live
+ * unconditionally, which broke exactly as you would expect: the indices job was
+ * not running (its Supabase secrets were unset), so Supabase sat at 2026-07-29
+ * while the repo had 2026-07-31 — and because the stale fetch still returned
+ * 200, nothing fell back. Market Pulse showed two-day-old closes next to
+ * fund data from today.
+ *
+ * Comparing dates makes it self-healing in both directions: if the indices job
+ * stops, the nightly build carries the strip; if the nightly build is delayed,
+ * the live files carry it. The extra request is ~7 KB gzipped.
  */
 export function useIndices() {
   type IndicesData = import('../types').IndicesData
@@ -88,10 +94,35 @@ export function useIndices() {
       return (await r.json()) as IndicesData
     }
 
-    live()
-      .catch(() => committed())
-      .then(d => { if (!cancelled) { setData(d); setLoading(false) } })
-      .catch(e => { if (!cancelled) { setError(e.message); setLoading(false) } })
+    // Settled, not all: one source failing must not sink the other. Local
+    // `npm run dev` has no Netlify proxy, so `live` always rejects there.
+    Promise.allSettled([live(), committed()])
+      .then(([liveRes, commRes]) => {
+        if (cancelled) return
+        const ok = [liveRes, commRes]
+          .filter((r): r is PromiseFulfilledResult<IndicesData> => r.status === 'fulfilled')
+          .map(r => r.value)
+          .filter(d => d?.indices?.length)
+
+        if (!ok.length) {
+          const why = [liveRes, commRes]
+            .map(r => (r.status === 'rejected' ? String(r.reason?.message ?? r.reason) : ''))
+            .filter(Boolean)
+            .join('; ')
+          setError(why || 'no index data available')
+          setLoading(false)
+          return
+        }
+
+        // Freshest wins. Compare the newest close each source actually holds
+        // rather than its as_of label, which the committed file stamps with the
+        // build date and would therefore always look newer.
+        const newest = (d: IndicesData) =>
+          d.indices.reduce((a, i) => (i.date > a ? i.date : a), '')
+        ok.sort((a, b) => (newest(b) < newest(a) ? -1 : 1))
+        setData(ok[0])
+        setLoading(false)
+      })
 
     return () => { cancelled = true }
   }, [])
