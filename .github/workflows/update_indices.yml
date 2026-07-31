@@ -88,13 +88,14 @@ jobs:
             || { echo "::error::SUPABASE_SERVICE_KEY secret is not set"; exit 1; }
           echo "Supabase configured (bucket: ${SUPABASE_BUCKET:-Indicies Data})"
 
-      # --publish-json rebuilds indices.json and index/*.json from the refreshed
-      # store into a temp dir and uploads them to the bucket root. Without it the
-      # store would update but the site would keep serving the older closes.
-      - name: Refresh index history and publish Market Pulse JSON
+      # Publishes the 8 per-index files straight to the bucket root. There is no
+      # --publish-json flag: an earlier layout built a separate indices.json and
+      # index/*.json set, and passing that removed flag is what made this step
+      # exit 2 (argparse's code for an unrecognised argument).
+      - name: Refresh and publish the 8 Market Pulse indices
         id: refresh
         run: |
-          python scripts/update_indices.py --publish-json \
+          python scripts/update_indices.py \
             ${{ github.event.inputs.seed == 'true' && '--seed' || '' }} \
             ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }} \
             ${{ github.event.inputs.retention_years && format('--retention-years {0}', github.event.inputs.retention_years) || '' }}
