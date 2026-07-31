@@ -5,12 +5,24 @@ name: Daily Data Update
 # database away. Nothing is stored between runs — no Release asset, no
 # committed database.
 
+# ONE RUN A DAY, ONE DEPLOY.
+#
+# There used to be a second cron at 08:15 IST as a catch-up. It committed too
+# whenever more funds had reported overnight, so Netlify rebuilt twice a day for
+# the same day's data. Now there is a single run and a single deploy; if it
+# fails, re-run it from the Actions tab rather than waiting for a second cron.
+#
+# 23:45 IST is chosen because both upstreams are settled by then:
+#   AMFI/mfapi publish the day's NAVs by ~23:00 IST  (verified: the 23:45 run
+#     picked up as_of 2026-07-30 on 2026-07-30)
+#   NSE closes 15:30 IST, so Yahoo's daily bar is 8h old  (verified: 2026-07-31
+#     closes were available by 19:39 IST)
+#
+# Asking earlier risks storing an intraday index value as if it were a close.
 on:
   schedule:
     # 23:45 IST = 18:15 UTC
     - cron: '15 18 * * *'
-    # 08:15 IST catch-up = 02:45 UTC next day
-    - cron: '45 2 * * *'
   workflow_dispatch:
     inputs:
       max_staleness:
@@ -105,6 +117,9 @@ jobs:
       # The catalogue is committed alongside the JSON: without it, a fund added
       # by the refresh step above would be rediscovered every single day and
       # never persist.
+      #
+      # This single commit is what triggers the single Netlify deploy, so NAVs
+      # and indices go live together.
       - name: Commit and push updated JSON
         run: |
           git config user.name  "github-actions[bot]"
@@ -115,3 +130,26 @@ jobs:
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Same run, same closes: push the 8 Market Pulse indices to Supabase so the
+      # live path and the committed copy agree instead of drifting apart.
+      #
+      # Placed AFTER the commit on purpose. The NAV data is the expensive part of
+      # this job and must never be held hostage to a Storage hiccup; by here it is
+      # already pushed. A failure below still turns the run red so it gets seen.
+      #
+      # Skipped rather than failed when the secrets are absent: the committed
+      # indices.json is already fresh, and useIndices takes whichever source has
+      # the newer close, so the site stays correct either way.
+      - name: Publish Market Pulse indices to Supabase
+        if: ${{ env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_KEY != '' }}
+        run: python scripts/update_indices.py
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: Note when the Supabase push was skipped
+        if: ${{ env.SUPABASE_URL == '' || env.SUPABASE_SERVICE_KEY == '' }}
+        run: |
+          echo "::warning::SUPABASE_URL / SUPABASE_SERVICE_KEY not set — the 8 index"
+          echo "::warning::files were not refreshed. The site falls back to the"
+          echo "::warning::committed indices.json, which this run just updated."

@@ -21,11 +21,19 @@ name: Update Indices
 # same evening's closes. NSE closes 15:30 IST; 17:30 leaves time for Yahoo to
 # settle the daily bar.
 
+# MANUAL ONLY — no cron.
+#
+# The daily refresh now happens inside daily_update.yml, in the same run that
+# publishes the NAVs, so both go live on one deploy. This workflow used to run on
+# its own 17:30 IST cron, which meant index closes and fund NAVs arrived at
+# different times and Netlify built more than once a day.
+#
+# Kept for the jobs a schedule cannot do:
+#   - a one-off refresh after adding an index
+#   - --seed to rebuild every file's history from scratch
+#   - --cleanup to remove objects that are not one of the 8
+#   - --dry-run to validate without uploading
 on:
-  schedule:
-    # 17:30 IST = 12:00 UTC, Mon-Fri (Indian markets are shut at the weekend,
-    # and a Saturday run would only re-request Friday's close).
-    - cron: '0 12 * * 1-5'
   workflow_dispatch:
     inputs:
       seed:
