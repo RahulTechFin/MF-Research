@@ -288,9 +288,20 @@ def main():
         final_dir = os.environ.get("MF_OUTPUT_DIR") or os.path.join(
             ROOT_DIR, "site", "public", "data"
         )
+        # A leftover staging directory must not be able to kill a run whose NAV
+        # data is already fetched and validated. publish() already tolerates
+        # Windows/OneDrive holding a handle on a just-emptied folder; this line did
+        # not, and a stuck data.staging/category_history aborted a run with
+        # PermissionError right after "Validation passed" — 4.7M rows fetched and
+        # thrown away. Fall back to a uniquely named directory instead of dying.
         staging_dir = final_dir + ".staging"
         if os.path.exists(staging_dir):
-            shutil.rmtree(staging_dir)
+            shutil.rmtree(staging_dir, ignore_errors=True)
+        if os.path.exists(staging_dir):
+            staging_dir = f"{final_dir}.staging-{os.getpid()}"
+            log.warning("Could not clear the old staging directory; using %s",
+                        os.path.basename(staging_dir))
+            shutil.rmtree(staging_dir, ignore_errors=True)
         os.makedirs(staging_dir, exist_ok=True)
         os.environ["MF_OUTPUT_DIR"] = staging_dir
 

@@ -189,3 +189,81 @@ export function useDrawdown(schemeCode: string) {
 // never called — TrendFinder, BlendStudio, CategoryTrends and IndexChartModal
 // each fetch those paths directly, because they need several files in parallel
 // rather than the single-file shape this hook provides.
+
+/**
+ * NAV series for many funds at once, from the same nav/<code>.json the pipeline
+ * writes — no new data file, no second source.
+ *
+ * Concurrency is capped because a category can hold 300+ funds and firing 300
+ * requests at once gets them queued by the browser anyway, while making the
+ * first result arrive later than it needs to. Eight in flight keeps the table
+ * filling steadily.
+ *
+ * Partial results are returned as they arrive, so a big category renders
+ * progressively instead of showing nothing for several seconds. A fund whose
+ * file is missing is simply absent from the map rather than failing the batch.
+ */
+export function useNavSeriesMany(codes: string[]) {
+  type Series = [string, number][]
+  const [series, setSeries] = useState<Record<string, Series>>({})
+  const [loaded, setLoaded] = useState(0)
+  const [loading, setLoading] = useState(false)
+
+  // Codes arrive as a fresh array every render; key on the contents.
+  const key = codes.join(',')
+
+  useEffect(() => {
+    if (!codes.length) { setSeries({}); setLoaded(0); setLoading(false); return }
+    let cancelled = false
+    setLoading(true)
+    setSeries({})
+    setLoaded(0)
+
+    const CONCURRENCY = 8
+    const queue = [...codes]
+    const out: Record<string, Series> = {}
+    let done = 0
+
+    const worker = async () => {
+      while (!cancelled) {
+        const code = queue.shift()
+        if (!code) return
+        try {
+          const path = await navPath(code)
+          const r = await fetch(`${BASE}/${path}`)
+          if (r.ok) {
+            const d = await r.json()
+            if (d?.series?.length) out[code] = d.series as Series
+          }
+        } catch {
+          /* a missing fund is omitted, not fatal */
+        }
+        done++
+        if (!cancelled && (done % 10 === 0 || done === codes.length)) {
+          setSeries({ ...out })
+          setLoaded(done)
+        }
+      }
+    }
+
+    Promise.all(Array.from({ length: Math.min(CONCURRENCY, codes.length) }, worker))
+      .then(() => {
+        if (cancelled) return
+        setSeries({ ...out })
+        setLoaded(codes.length)
+        setLoading(false)
+      })
+
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+
+  return { series, loaded, total: codes.length, loading }
+}
+
+/** One index's full series, for the benchmark comparison. */
+export function useIndexSeries(indexId: number | null) {
+  return useJson<{ index_id: number; index_name: string; series: [string, number][] }>(
+    indexId ? `index/${indexId}.json` : '',
+  )
+}
