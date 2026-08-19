@@ -23,10 +23,23 @@ if (profile === 'admin') {
   process.exit(0)
 }
 
+// DATA PRUNING NO LONGER APPLIES.
+//
+// The JSON used to be committed and copied into dist/, so a team build had to
+// delete the restricted files or a team member could fetch them by URL. The data
+// now lives in a public Supabase bucket that netlify.toml proxies, so there is
+// nothing in dist/ to delete -- and nothing a build could hide, since every file
+// in that bucket is readable by URL regardless of which profile was built.
+//
+// A missing directory is therefore the expected state, not an error. The bundle
+// fingerprint check further down still matters and still runs: it is what catches
+// VITE_PROFILE not being set to "team".
 const dataDir = path.join(distDir, 'data')
-if (!fs.existsSync(dataDir)) {
-  console.error(`[prune] no data directory at ${dataDir}`)
-  process.exit(1)
+const hasData = fs.existsSync(dataDir)
+if (!hasData) {
+  console.log('[prune] no dist/data — data is served from Supabase, nothing to prune')
+  console.log('[prune] NOTE: bucket objects are public, so a team build cannot')
+  console.log('[prune]       hide restricted data. Use bucket policies for that.')
 }
 
 // The allowlist is DERIVED from src/config/sections.json — the same file the
@@ -48,6 +61,7 @@ const ALLOW = config.publicSections.flatMap(id => {
 console.log(`[prune] public sections: ${config.publicSections.join(', ')}`)
 
 function walk(dir) {
+  if (!fs.existsSync(dir)) return []
   const out = []
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name)
@@ -108,6 +122,7 @@ for (const dir of walk_dirs(dataDir).reverse()) {
 
 function walk_dirs(dir) {
   const out = []
+  if (!fs.existsSync(dir)) return out
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.isDirectory()) {
       const full = path.join(dir, entry.name)
@@ -117,12 +132,14 @@ function walk_dirs(dir) {
   return out
 }
 
-console.log(
-  `[prune] team build — kept ${kept} files, removed ${removedCount} ` +
-  `(${(removedBytes / 1024 / 1024).toFixed(1)} MB of restricted data)`
-)
+if (hasData) {
+  console.log(
+    `[prune] team build — kept ${kept} files, removed ${removedCount} ` +
+    `(${(removedBytes / 1024 / 1024).toFixed(1)} MB of restricted data)`
+  )
+}
 
-if (kept === 0) {
+if (hasData && kept === 0) {
   console.error('[prune] ERROR: everything was removed — the allowlist is wrong')
   process.exit(1)
 }

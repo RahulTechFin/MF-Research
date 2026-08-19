@@ -29,7 +29,8 @@ log = logging.getLogger("supabase_store")
 
 _BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-_KEYS = ("SUPABASE_URL", "SUPABASE_SERVICE_KEY", "SUPABASE_BUCKET")
+_KEYS = ("SUPABASE_URL", "SUPABASE_SERVICE_KEY", "SUPABASE_BUCKET",
+         "SUPABASE_DATA_BUCKET")
 
 
 def _load_env() -> dict[str, str]:

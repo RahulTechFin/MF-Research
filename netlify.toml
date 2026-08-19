@@ -2,6 +2,16 @@
   base    = "site"
   publish = "dist"
   command = "npm run build"
+  # Build only when something outside data/ changed.
+  #
+  # Netlify runs this before building: exit 0 means SKIP. The nightly job commits
+  # data/scheme_catalogue.json when a new fund appears, and that file is only read
+  # by the pipeline, never by the site — so rebuilding for it would spend minutes
+  # producing an identical bundle. site/public/data is untracked now and cannot
+  # appear here at all; it is listed for the avoidance of doubt.
+  #
+  # $CACHED_COMMIT_REF is the commit of the last successful build.
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ':(exclude)data/' ':(exclude)site/public/data/'"
 
 [build.environment]
   NODE_VERSION = "20"

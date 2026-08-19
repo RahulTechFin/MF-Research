@@ -28,7 +28,14 @@ site/dist/
 site/.vite/
 
 # Pre-built JSON (committed to repo for Netlify static hosting)
-# site/public/data/  ← kept in git
+# The dashboard's data is NOT in git any more. It lives in the public Supabase
+# "MF Data" bucket, which netlify.toml proxies as /data/*. Committing ~2,500 files
+# nightly made Netlify rebuild and re-upload the whole site: ~15 min a deploy,
+# ~450 min a month against a 300-min allowance. Now only code changes build.
+#
+# scripts/publish_data.py uploads it; scripts/daily_run.py still writes it here
+# first, so this stays a real local directory — just an untracked one.
+site/public/data/
 
 # Logs & pytest
 *.log

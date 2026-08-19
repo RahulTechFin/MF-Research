@@ -69,8 +69,6 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # No database download. The scheme universe lives in the committed
-      # catalogue (data/scheme_catalogue.json, ~777 KB); NAVs come from the API.
       # The quartile rule is pinned in tests/test_quartile.py. Run it before
       # spending 10 minutes on a pipeline whose central calculation has drifted:
       # 10 of the 14 pinned bracket sizes change if the remainder goes back to
@@ -123,22 +121,46 @@ jobs:
             echo "No database stored. ✔"
           fi
 
-      # The catalogue is committed alongside the JSON: without it, a fund added
-      # by the refresh step above would be rediscovered every single day and
-      # never persist.
+      # Publish the ~2,500 data files to Supabase. This REPLACES committing them.
       #
-      # This single commit is what triggers the single Netlify deploy, so NAVs
-      # and indices go live together.
-      - name: Commit and push updated JSON
+      # Committing meant Netlify rebuilt and re-uploaded the whole site nightly:
+      # ~15 min a deploy, ~450 min a month against a 300-min allowance. The site
+      # reads /data/* straight from the bucket now, so the moment this finishes
+      # the new data is live -- no deploy, no build minutes.
+      - name: Publish data to Supabase
+        run: python scripts/publish_data.py
+        env:
+          PYTHONIOENCODING: utf-8
+
+      # Only the catalogue is committed, and only when it changed -- without it a
+      # newly launched fund would be rediscovered every day and never persist. It
+      # is not read by the frontend, so netlify.toml's ignore rule stops this
+      # commit from triggering a build.
+      - name: Commit the scheme catalogue if it changed
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add site/public/data/ data/scheme_catalogue.json
-          git diff --cached --quiet \
-            || git commit -m "chore: data update $(date -u '+%Y-%m-%d %H:%M UTC')"
-          git push
+          git add data/scheme_catalogue.json
+          if git diff --cached --quiet; then
+            echo "Catalogue unchanged - nothing committed, so nothing to deploy."
+          else
+            git commit -m "chore: scheme catalogue $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git pull --rebase --autostash origin ${GITHUB_REF_NAME} || true
+            git push
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # site/public/data is untracked now, so anything showing up there in git
+      # status means something wrote where it should not.
+      - name: Confirm no data was committed
+        if: always()
+        run: |
+          if git status --porcelain | grep -q "site/public/data"; then
+            echo "::error::site/public/data is in git status - it must stay untracked"
+            exit 1
+          fi
+          echo "Data lives in Supabase only."
 
       # Same run, same closes: push the 8 Market Pulse indices to Supabase so the
       # live path and the committed copy agree instead of drifting apart.
