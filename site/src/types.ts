@@ -99,6 +99,15 @@ export interface QuartileFundRow {
   scheme_code: string
   scheme_name: string
   quartiles: (number | null)[]
+  /**
+   * The return each quartile was computed from — same index as `quartiles`.
+   * Shown in the cell tooltip: a Q box on its own invites comparison against
+   * whatever return is visible elsewhere (usually 1Y), and a fund can be top
+   * for the year while bottom for the quarter.
+   */
+  returns?: (number | null)[]
+  /** Stamped by build_json for sectoral/thematic funds only. */
+  sector?: string
 }
 
 export interface ConsistencyEntry {

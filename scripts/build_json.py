@@ -835,6 +835,12 @@ def build_quartiles(conn, cat_slug: str, mode: str = "quarterly"):
             "scheme_code": sc,
             "scheme_name": name,
             "quartiles":   all_quartiles[sc],
+            # The return each quartile was computed from, same index as
+            # `quartiles`. Emitted so the table can show it: a Q box beside an
+            # unrelated 1Y figure reads as a bug — a fund can be top for the year
+            # and bottom for the quarter, and without the period return on screen
+            # there is no way to see that is what happened.
+            "returns":     [fmt(v) for v in returns_grid[sc]],
             # Stamped here so the browser never has to classify a fund itself.
             # The rules live in scripts/sectors.py alone.
             **({"sector": sectors[sc]} if sectors else {}),

@@ -124,8 +124,13 @@ function FundRow({ fund, streak, tone, periodWord, compact, labels }: {
         </div>
 
         <div className="shrink-0 text-right" style={{ minWidth: 78 }}>
+          {/* Labelled "1Y" deliberately. The boxes to the left are per-period
+              quartiles, so a fund can be strong over a year and weak in the
+              latest quarter. Unlabelled, the two read as contradicting. */}
           <div className="text-xs font-semibold tabnum"
+            title={`Trailing 1-year return. The quartile boxes rank each ${periodWord} separately, so they need not agree with this.`}
             style={{ color: fund.ret_1y == null ? 'var(--text-low)' : fund.ret_1y >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
+            <span className="font-normal" style={{ color: 'var(--text-low)', fontSize: 9 }}>1Y </span>
             {fund.ret_1y != null ? fmtPct(fund.ret_1y) : '—'}
           </div>
           {diff != null && (

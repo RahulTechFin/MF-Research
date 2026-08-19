@@ -579,11 +579,32 @@ export default function QuartileRanking() {
                     <td className="sticky-col text-xs font-medium truncate" style={{ maxWidth: 240 }}>
                       {fund.scheme_name}
                     </td>
-                    {[...fund.quartiles].reverse().map((q, i) => (
-                      <td key={i} className="text-center">
-                        <div className={quartilePillClass(q as number | null)}>{q ? `Q${q}` : '−'}</div>
-                      </td>
-                    ))}
+                    {/* Each cell carries the return it was ranked on. Without it
+                        the grid looks wrong whenever a fund is strong over 1Y and
+                        weak in one quarter — the quartile is per period, and the
+                        only return on screen elsewhere is the 1Y one. */}
+                    {[...fund.quartiles].reverse().map((q, i) => {
+                      const label = reversedPeriodLabels[i]
+                      // `returns` is optional: JSON built before it was added has
+                      // no such array. Distinguish "we were not sent the return"
+                      // from "the fund had no return" — conflating them would
+                      // label a perfectly ranked fund as unranked.
+                      const hasReturns = Array.isArray(fund.returns)
+                      const ret = hasReturns ? [...fund.returns!].reverse()[i] : undefined
+                      const pool = isSectoral ? sectorOf(fund) : data.category_name
+                      const tip =
+                        q == null
+                          ? `${label}: not ranked (no return for this period)`
+                          : hasReturns && ret != null
+                            ? `${label}: ${fmtPct(ret)} → Q${q}\n` +
+                              `ranked against ${pool} funds for ${label} alone — not 1Y`
+                            : `${label}: Q${q}\nranked against ${pool} funds for ${label} alone — not 1Y`
+                      return (
+                        <td key={i} className="text-center" title={tip}>
+                          <div className={quartilePillClass(q as number | null)}>{q ? `Q${q}` : '−'}</div>
+                        </td>
+                      )
+                    })}
                   </tr>
                 ))}
               </tbody>
