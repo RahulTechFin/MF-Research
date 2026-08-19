@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useMeta } from '../hooks/useData'
 import { shortFundName } from '../utils/format'
+import { navPath, dataUrl } from '../config/dataPaths'
 
 const CHART_COLORS = ['#22D3EE', '#F472B6', '#8B5CF6', '#F59E0B', '#34D399']
 const TIMEFRAMES   = ['1M', '3M', '6M', '12M', '3Y', '5Y', 'All']
@@ -46,16 +47,18 @@ export default function TrendFinder({ selectedFunds, onToggleFund }: Props) {
     }
 
     setLoading(true)
-    const fetches = selectedFunds.map(code => {
-      // Find name from meta if possible
-      const url = `${import.meta.env.BASE_URL}data/nav/${code}.json`
-      return fetch(url)
-        .then(r => {
-          if (!r.ok) throw new Error()
-          return r.json()
-        })
-        .then(d => ({ code, label: d.scheme_name || `Fund ${code}`, series: d.series as [string, number][] }))
-        .catch(() => null)
+    // async because a fund's NAV now lives at <asset-class>/<slug>/nav/<code>.json
+    // and only manifest.json knows which category a code belongs to. That lookup
+    // is why this screen does not need the slug passed down from the screener.
+    const fetches = selectedFunds.map(async code => {
+      try {
+        const r = await fetch(dataUrl(await navPath(code)))
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        const d = await r.json()
+        return { code, label: d.scheme_name || `Fund ${code}`, series: d.series as [string, number][] }
+      } catch {
+        return null
+      }
     })
 
     Promise.all(fetches).then(results => {

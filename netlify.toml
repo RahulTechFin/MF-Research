@@ -6,19 +6,40 @@
 [build.environment]
   NODE_VERSION = "20"
 
-# ── Live Market Pulse indices, proxied from Supabase Storage ─────────────────
-# scripts/update_indices.py publishes one file per index to the public bucket
-# every weekday evening. Proxying rather than fetching cross-origin keeps it
-# same-origin, so no CORS and no key in the browser.
+# ── Everything below proxies to public Supabase Storage buckets ──────────────
 #
-# The path is /live/indices/, NOT /data/index/. That matters: BlendStudio and
-# TrendFinder read /data/index/{id}.json for all 36 committed benchmarks, and
-# proxying that prefix would send their requests to a bucket holding only 8.
+# The data no longer ships inside the site. Committing ~2,500 files meant Netlify
+# rebuilt and re-uploaded the whole thing nightly: ~15 min a deploy, ~450 min a
+# month against a 300-min allowance. Now only code changes trigger a build.
 #
-# ORDER MATTERS: Netlify evaluates redirects top-down, so this must stay above
-# the SPA catch-all or /* would swallow it.
+# Proxying (status 200) rather than letting the browser fetch Supabase directly
+# keeps every request same-origin — no CORS, and no key in the browser. Both
+# buckets are public, so no credential is involved at all. %20 is the space in
+# each bucket name.
 #
-# The bucket is public, so no key is involved. %20 is the space in the name.
+# force = true makes the proxy win over any same-named file left in dist/.
+#
+# ORDER MATTERS: Netlify evaluates redirects top-down, so both must stay above
+# the SPA catch-all or /* would swallow them.
+
+# The dashboard's data, organised by asset class:
+#   meta.json  manifest.json  indices.json  glance_*.json  watchlist_*.json
+#   index/<id>.json
+#   equity|hybrid|debt|other/<slug>/  category_*.json quartiles_*.json
+#                                     rolling.json risk.json history.json
+#                                     nav/<code>.json
+[[redirects]]
+  from   = "/data/*"
+  to     = "https://qhxofgrntftnxqdhottd.supabase.co/storage/v1/object/public/MF%20Data/:splat"
+  status = 200
+  force  = true
+
+# The 8 Market Pulse index files, refreshed in the same nightly run but kept in
+# their own bucket — 2,500 category files would bury them.
+#
+# Deliberately /live/indices/, never /data/index/: the latter is the 36 committed
+# benchmark series that BlendStudio and TrendFinder read, and pointing that
+# prefix at a bucket holding only 8 would break both.
 [[redirects]]
   from   = "/live/indices/*"
   to     = "https://qhxofgrntftnxqdhottd.supabase.co/storage/v1/object/public/Indicies%20Data/:splat"

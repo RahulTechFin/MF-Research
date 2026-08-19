@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useMeta } from '../hooks/useData'
+import { categoryPath, dataUrl } from '../config/dataPaths'
 
 const CHART_COLORS = ['#22D3EE', '#F472B6', '#8B5CF6', '#F59E0B', '#34D399']
 const TIMEFRAMES   = ['1M', '3M', '6M', '12M', '3Y', '5Y', 'All']
@@ -30,16 +31,18 @@ export default function CategoryTrends({ selectedCategories }: Props) {
     }
 
     setLoading(true)
-    const fetches = selectedCategories.map(slug => {
+    // async because the path is now <asset-class>/<slug>/history.json and the
+    // asset class comes from manifest.json.
+    const fetches = selectedCategories.map(async slug => {
       const catName = meta?.categories.find(c => c.slug === slug)?.category_name || slug
-      const url = `${import.meta.env.BASE_URL}data/category_history/${slug}.json`
-      return fetch(url)
-        .then(r => {
-          if (!r.ok) throw new Error()
-          return r.json()
-        })
-        .then(d => ({ slug, label: catName, series: d.series as [string, number][] }))
-        .catch(() => null)
+      try {
+        const r = await fetch(dataUrl(await categoryPath(slug, 'history.json')))
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        const d = await r.json()
+        return { slug, label: catName, series: d.series as [string, number][] }
+      } catch {
+        return null
+      }
     })
 
     Promise.all(fetches).then(results => {

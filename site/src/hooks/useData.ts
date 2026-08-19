@@ -4,26 +4,46 @@ import { useState, useEffect, useMemo } from 'react'
 import { computeDrawdown } from '../utils/drawdown'
 import { MARKET_PULSE_INDICES, LIVE_INDEX_BASE } from '../config/indices'
 import type { LiveIndexFile } from '../config/indices'
+import { DATA_BASE, categoryPath, navPath } from '../config/dataPaths'
 
-const BASE = import.meta.env.BASE_URL + 'data'
+const BASE = DATA_BASE
 
-export function useJson<T>(path: string) {
+/**
+ * Fetch one JSON file from the data bucket.
+ *
+ * `path` is either a bucket-relative path, or a function returning a promise of
+ * one. The function form exists because a category-scoped path has to wait for
+ * manifest.json before it is even known; keeping that inside this hook means the
+ * twenty-odd callers never deal with it.
+ *
+ * `key` identifies the request for the effect's dependency list, since a
+ * function identity changes on every render and cannot be compared.
+ */
+export function useJson<T>(path: string | (() => Promise<string>), key?: string) {
   const [data, setData]   = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const dep = typeof path === 'string' ? path : (key ?? '')
 
   useEffect(() => {
-    if (!path) return
+    if (!dep) return
+    let cancelled = false
     setLoading(true)
     setError(null)
-    fetch(`${BASE}/${path}`)
+
+    const resolve = typeof path === 'string' ? Promise.resolve(path) : path()
+    resolve
+      .then(p => fetch(`${BASE}/${p}`))
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       })
-      .then(d => { setData(d); setLoading(false) })
-      .catch(e => { setError(e.message); setLoading(false) })
-  }, [path])
+      .then(d => { if (!cancelled) { setData(d); setLoading(false) } })
+      .catch(e => { if (!cancelled) { setError(e.message); setLoading(false) } })
+
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dep])
 
   return { data, loading, error }
 }
@@ -131,15 +151,18 @@ export function useIndices() {
 }
 
 export function useCategoryTable(slug: string, view: string) {
-  return useJson<import('../types').CategoryTableData>(`category_${slug}_${view}.json`)
+  return useJson<import('../types').CategoryTableData>(
+    () => categoryPath(slug, `category_${view}.json`), `cat:${slug}:${view}`)
 }
 
 export function useQuartiles(slug: string, mode: 'monthly' | 'quarterly' | 'annual') {
-  return useJson<import('../types').QuartilesData>(`quartiles_${slug}_${mode}.json`)
+  return useJson<import('../types').QuartilesData>(
+    () => categoryPath(slug, `quartiles_${mode}.json`), `q:${slug}:${mode}`)
 }
 
 export function useRisk(slug: string) {
-  return useJson<import('../types').RiskData>(`risk_${slug}.json`)
+  return useJson<import('../types').RiskData>(
+    () => categoryPath(slug, 'risk.json'), `risk:${slug}`)
 }
 
 /**
@@ -151,7 +174,8 @@ export function useRisk(slug: string) {
  */
 export function useDrawdown(schemeCode: string) {
   const { data: nav, loading, error } =
-    useJson<import('../types').NavSeries>(schemeCode ? `nav/${schemeCode}.json` : '')
+    useJson<import('../types').NavSeries>(
+      () => navPath(schemeCode), schemeCode ? `nav:${schemeCode}` : '')
 
   const data: import('../types').DrawdownData | null = useMemo(() => {
     if (!nav?.series?.length) return null

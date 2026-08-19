@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useMeta } from '../hooks/useData'
+import { categoryPath, dataUrl } from '../config/dataPaths'
 
 interface BlendWeight {
   index_id: number
@@ -109,7 +110,8 @@ export default function BlendStudio() {
   // Fetch category history for comparative line
   useEffect(() => {
     setLoading(true)
-    fetch(`${import.meta.env.BASE_URL}data/category_history/${compareCategory}.json`)
+    categoryPath(compareCategory, 'history.json')
+      .then(p => fetch(dataUrl(p)))
       .then(r => r.json())
       .then(d => {
         setCategorySeries(d.series as [string, number][])
