@@ -55,10 +55,17 @@ def _load_env() -> dict[str, str]:
 _ENV = _load_env()
 URL = (_ENV.get("SUPABASE_URL") or "").rstrip("/")
 KEY = _ENV.get("SUPABASE_SERVICE_KEY") or ""
-# Matches the bucket that exists in the project, so SUPABASE_BUCKET only has to
-# be set if it is ever renamed. The space is fine — _object_url percent-encodes
-# it — but note the spelling is "Indicies", as created.
+# TWO BUCKETS, both public, both percent-encoded by _object_url (the spaces are
+# fine; note "Indicies" is spelled as it was created):
+#
+#   Indicies Data  the 8 Market Pulse index files      -> INDEX_BUCKET
+#   MF Data        the dashboard's ~2,500 data files   -> DATA_BUCKET
+#
+# Kept apart on purpose. The index files are refreshed and read on their own
+# path, and mixing 2,477 category files into that bucket would bury them.
 BUCKET = _ENV.get("SUPABASE_BUCKET") or "Indicies Data"
+INDEX_BUCKET = BUCKET
+DATA_BUCKET = _ENV.get("SUPABASE_DATA_BUCKET") or "MF Data"
 
 
 def enabled() -> bool:
@@ -242,3 +249,73 @@ def upload_file(local_path: str, remote_path: str, bucket: str | None = None,
     except Exception as exc:
         log.warning("Supabase upload %s failed: %s", remote_path, exc)
         return False
+
+
+def upload_many(items: list[tuple[str, str]], bucket: str | None = None,
+                workers: int = 12, content_type: str = "application/json",
+                cache_control: str | None = "max-age=300",
+                on_progress=None) -> tuple[int, list[str]]:
+    """
+    Upload [(local_path, remote_path), ...] concurrently.
+
+    Sequentially this is ~0.9 s per object, so 2,477 files would take 37 minutes
+    — longer than the pipeline that produced them. Twelve workers brings it to
+    about three. Each thread keeps its own Session because a single Session's
+    connection pool is not safe to share across threads.
+
+    Returns (uploaded, failed_remote_paths).
+    """
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    local = threading.local()
+
+    def session() -> requests.Session:
+        if not hasattr(local, "s"):
+            local.s = requests.Session()
+        return local.s
+
+    def put(item: tuple[str, str]) -> tuple[str, bool]:
+        src, remote = item
+        try:
+            with open(src, "rb") as fh:
+                body = fh.read()
+        except OSError as exc:
+            log.warning("cannot read %s: %s", src, exc)
+            return remote, False
+
+        extra = {"x-upsert": "true", "Content-Type": content_type}
+        if cache_control:
+            extra["cache-control"] = cache_control
+        url = _object_url(remote, bucket)
+        # Storage occasionally 5xx's under a burst of concurrent writes; a couple
+        # of retries costs nothing and avoids failing a whole publish over one.
+        for attempt in range(3):
+            try:
+                r = session().post(url, headers=_headers(extra), data=body, timeout=120)
+                if r.status_code in (200, 201):
+                    return remote, True
+                if r.status_code < 500:
+                    log.warning("upload %s -> HTTP %d %s", remote,
+                                r.status_code, r.text[:140])
+                    return remote, False
+            except Exception as exc:
+                if attempt == 2:
+                    log.warning("upload %s failed: %s", remote, exc)
+        return remote, False
+
+    if not enabled():
+        log.warning("Supabase not configured (%s) — nothing uploaded", why_disabled())
+        return 0, [r for _, r in items]
+
+    ok, failed, done = 0, [], 0
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for remote, good in pool.map(put, items):
+            done += 1
+            if good:
+                ok += 1
+            else:
+                failed.append(remote)
+            if on_progress and done % 200 == 0:
+                on_progress(done, len(items), ok, len(failed))
+    return ok, failed
