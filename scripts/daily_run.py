@@ -42,7 +42,12 @@ MIN_NAV_ROWS = 4_000_000        # full history should be ~5.5M
 MIN_SCHEMES_WITH_DATA = 2_800   # of ~3,210 catalogued
 MIN_INDEX_ROWS = 100_000        # committed history alone is ~133K
 MIN_INDICES = 30                # 36 benchmarks, 5 of them synthetic
-DEFAULT_MAX_STALENESS_DAYS = 5  # NAVs older than this = upstream problem
+# NAVs older than this = upstream problem. Was 5; raised to 6 because
+# build_db_from_api now caps history at IST-yesterday, so as_of is a day behind
+# by design. After a weekend plus a Monday holiday the newest NAV is Friday's and
+# a Tuesday run legitimately sees age 4 — a 5-day limit left almost no margin for
+# a longer festival cluster.
+DEFAULT_MAX_STALENESS_DAYS = 6
 
 
 def _fail(msg: str):

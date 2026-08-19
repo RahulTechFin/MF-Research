@@ -28,7 +28,7 @@ on:
       max_staleness:
         description: 'Max age (days) of the newest NAV before the run aborts'
         required: false
-        default: '5'
+        default: '6'
       skip_indices:
         description: 'Skip the Yahoo Finance index refresh'
         required: false
@@ -100,7 +100,7 @@ jobs:
         run: |
           python scripts/daily_run.py \
             --workers 12 \
-            --max-staleness "${{ github.event.inputs.max_staleness || '5' }}" \
+            --max-staleness "${{ github.event.inputs.max_staleness || '6' }}" \
             ${{ github.event.inputs.skip_indices == 'true' && '--skip-indices' || '' }}
         env:
           PYTHONIOENCODING: utf-8

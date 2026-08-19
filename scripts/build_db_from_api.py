@@ -27,7 +27,7 @@ import sqlite3
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)
@@ -53,6 +53,29 @@ MAX_FAILURE_RATE = 0.02
 # Keep 2010 to stay consistent with what the dashboard has always published;
 # pass --from-date 2006-01-01 to deliberately extend it.
 HISTORY_START = "2010-01-01"
+
+# India does not observe DST, so a fixed offset is exact. The runner's clock is
+# UTC and the job fires at 18:15 UTC, which is 23:45 the same IST day — but a
+# slow run can cross 18:30 UTC (00:00 IST), after which a UTC-derived "today"
+# would be a day behind the Indian one and the cap below would remove two days
+# instead of one.
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def previous_business_close(now: datetime | None = None) -> str:
+    """
+    The newest NAV date the dashboard is allowed to show: yesterday, IST.
+
+    WHY NOT TODAY
+    AMFI publishes a day's NAVs late that evening, and a run at 23:45 IST can
+    therefore land mid-publication. Every fund's returns anchor on its own latest
+    NAV, so a partial set does not corrupt the maths — but it does mean the "As
+    of" date claims today while most funds are still on yesterday, and the funds
+    that did report are compared against peers that have not. Capping at
+    yesterday makes the published date mean the same thing for every fund.
+    """
+    today_ist = (now or datetime.now(IST)).astimezone(IST).date()
+    return (today_ist - timedelta(days=1)).isoformat()
 
 
 # ── catalogue ────────────────────────────────────────────────────────────────
@@ -310,6 +333,24 @@ def build(db_path: str, limit: int | None, workers: int, mode: str,
         if writer.empty_schemes:
             log.warning("%d schemes returned zero usable NAV rows (e.g. %s)",
                         len(writer.empty_schemes), ", ".join(writer.empty_schemes[:8]))
+
+        # Cap at yesterday (IST). Applied here as one statement rather than
+        # threaded through parse_nav_rows/fetch_history/fetch_many, so no fetch
+        # path can quietly bypass it — and before last_nav_date is derived below,
+        # which must not point at a row that is about to be deleted.
+        cutoff = previous_business_close()
+        removed = conn.execute(
+            "DELETE FROM nav_history WHERE nav_date > ?", (cutoff,)
+        ).rowcount
+        if removed:
+            log.info("Capped NAV history at %s (IST yesterday): dropped %s "
+                     "same-day row(s)", cutoff, f"{removed:,}")
+        else:
+            log.info("Capped NAV history at %s (IST yesterday): nothing newer "
+                     "had been published", cutoff)
+        # A fund whose only NAV was today now has none. In 'history' mode that
+        # cannot happen for an established fund, but a launch today would vanish
+        # from the universe until tomorrow, which is the correct answer.
 
         log.info("Rebuilding indexes and scheme date ranges ...")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_nav_date ON nav_history(nav_date)")
