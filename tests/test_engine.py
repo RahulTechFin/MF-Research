@@ -206,35 +206,55 @@ def test_category_average_single():
 # ── E9: Quartile formula ──────────────────────────────────────────────────────
 
 class TestQuartile:
-    """Verify the Python quartile() matches owner's Excel ROUNDUP formula exactly."""
+    """
+    The rule the owner set: equal brackets of n//4, remainder to the BOTTOM
+    quartiles (Q4, then Q3, then Q2). Pools under SMALL_POOL keep the older
+    ROUNDUP behaviour so a lone fund is not labelled bottom-quartile.
+
+    These used to encode the ROUNDUP rule, which gave the spare fund to Q1. The
+    owner changed that; tests/test_quartile.py is the exhaustive lock, and these
+    are kept in step with it.
+    """
 
     def test_n4_all_quartiles(self):
-        # N=4: thresholds = ceil(1), ceil(2), ceil(3) = 1, 2, 3
+        # n=4 divides evenly, so both rules agree.
         assert quartile(1, 4) == 1
         assert quartile(2, 4) == 2
         assert quartile(3, 4) == 3
         assert quartile(4, 4) == 4
 
     def test_n10(self):
-        # N=10: Q1≤3, Q2≤5, Q3≤8
+        # n=10 -> base 2, remainder 2 -> [2,2,3,3]: Q1 1-2, Q2 3-4, Q3 5-7, Q4 8-10
         assert quartile(1, 10) == 1
-        assert quartile(3, 10) == 1
+        assert quartile(2, 10) == 1
+        assert quartile(3, 10) == 2
         assert quartile(4, 10) == 2
-        assert quartile(5, 10) == 2
-        assert quartile(6, 10) == 3
-        assert quartile(8, 10) == 3
-        assert quartile(9, 10) == 4
+        assert quartile(5, 10) == 3
+        assert quartile(7, 10) == 3
+        assert quartile(8, 10) == 4
         assert quartile(10, 10) == 4
 
     def test_n7_boundary(self):
-        # N=7: ceil(7*0.25)=2, ceil(7*0.5)=4, ceil(7*0.75)=6
+        # n=7 -> base 1, remainder 3 -> [1,2,2,2]: Q1 1, Q2 2-3, Q3 4-5, Q4 6-7
         assert quartile(1, 7) == 1
-        assert quartile(2, 7) == 1
+        assert quartile(2, 7) == 2
         assert quartile(3, 7) == 2
-        assert quartile(4, 7) == 2
+        assert quartile(4, 7) == 3
         assert quartile(5, 7) == 3
-        assert quartile(6, 7) == 3
+        assert quartile(6, 7) == 4
         assert quartile(7, 7) == 4
+
+    def test_remainder_goes_to_the_bottom(self):
+        # n=17 -> [4,4,4,5]: the spare fund lands in Q4, never Q1.
+        assert quartile(4, 17) == 1
+        assert quartile(5, 17) == 2
+        assert quartile(13, 17) == 4
+        assert quartile(17, 17) == 4
+
+    def test_small_pool_keeps_the_old_behaviour(self):
+        # A single fund must not read as bottom-quartile.
+        assert quartile(1, 1) == 1
+        assert quartile(1, 2) == 1
 
     def test_none_inputs(self):
         assert quartile(None, 10) is None
@@ -243,10 +263,11 @@ class TestQuartile:
     def test_rank_and_quartile(self):
         returns = {"A": 0.30, "B": 0.20, "C": 0.10, "D": None}
         result  = rank_and_quartile(returns)
-        # A=rank1, B=rank2, C=rank3, D=None; N=3
-        assert result["A"] == (1, 1)   # Q1 = ceil(3*0.25)=1 → rank1
-        assert result["B"] == (2, 2)   # Q2 = ceil(3*0.50)=2 → rank2
-        assert result["C"] == (3, 3)   # Q3 = ceil(3*0.75)=3 → rank3 (no Q4)
+        # Ranks are by descending return; D is excluded, so n = 3.
+        # n=3 -> base 0, remainder 3 -> [0,1,1,1]: no Q1 exists at this size.
+        assert result["A"] == (1, 2)
+        assert result["B"] == (2, 3)
+        assert result["C"] == (3, 4)
         assert result["D"] == (None, None)
 
 

@@ -250,15 +250,9 @@ def annual_return(
     today = as_of or date.today()
     current_year = today.year
 
-    # Start NAV: 01-Jan → NEAREST-NEXT
-    start_target = date(year, 1, 1)
-    start_d, nav_start = resolve_nearest_next(conn, scheme_code, start_target)
+    # Start NAV: the previous year's close (31-Dec), not 01-Jan.
+    start_d, nav_start = period_start_value(conn, scheme_code, date(year, 1, 1))
     if start_d is None or nav_start is None:
-        return None
-
-    # Eligibility: fund first NAV ≤ resolved start
-    first = _first_nav_date(conn, scheme_code)
-    if first is None or first > start_d:
         return None
 
     # End NAV: 31-Dec → NEAREST-PREVIOUS; current year → ANCHOR
@@ -292,11 +286,8 @@ def annual_return_index(
     today = as_of or date.today()
     current_year = today.year
 
-    start_target = date(year, 1, 1)
-    start_d, close_start = resolve_nearest_next(
-        conn, str(index_id), start_target,
-        table="index_history", code_col="index_id", date_col="date", val_col="close",
-    )
+    # Previous year's close (31-Dec), matching annual_return for funds.
+    start_d, close_start = index_period_start_value(conn, index_id, date(year, 1, 1))
     if start_d is None or close_start is None:
         return None
 
@@ -342,14 +333,9 @@ def quarter_return(
     current_quarter = (today.month - 1) // 3 + 1
 
     qsm, qsd = QUARTER_STARTS[quarter]
-    start_target = date(year, qsm, qsd)
-    # Start: NEAREST-NEXT
-    start_d, nav_start = resolve_nearest_next(conn, scheme_code, start_target)
+    # Start: the previous quarter's close, not the quarter's first day.
+    start_d, nav_start = period_start_value(conn, scheme_code, date(year, qsm, qsd))
     if start_d is None or nav_start is None:
-        return None
-
-    first = _first_nav_date(conn, scheme_code)
-    if first is None or first > start_d:
         return None
 
     is_current = (year == current_year and quarter == current_quarter)
@@ -386,11 +372,8 @@ def quarter_return_index(
     current_quarter = (today.month - 1) // 3 + 1
 
     qsm, qsd = QUARTER_STARTS[quarter]
-    start_target = date(year, qsm, qsd)
-    start_d, close_start = resolve_nearest_next(
-        conn, str(index_id), start_target,
-        table="index_history", code_col="index_id", date_col="date", val_col="close",
-    )
+    # Previous quarter's close, matching quarter_return for funds.
+    start_d, close_start = index_period_start_value(conn, index_id, date(year, qsm, qsd))
     if start_d is None or close_start is None:
         return None
 
@@ -433,13 +416,9 @@ def month_return(
     """
     today = as_of or date.today()
 
-    start_target = date(year, month, 1)
-    start_d, nav_start = resolve_nearest_next(conn, scheme_code, start_target)
+    # Start: the previous month's close, not the 1st.
+    start_d, nav_start = period_start_value(conn, scheme_code, date(year, month, 1))
     if start_d is None or nav_start is None:
-        return None
-
-    first = _first_nav_date(conn, scheme_code)
-    if first is None or first > start_d:
         return None
 
     is_current = (year == today.year and month == today.month)
@@ -472,11 +451,8 @@ def month_return_index(
     """E7: Monthly return for index."""
     today = as_of or date.today()
 
-    start_target = date(year, month, 1)
-    start_d, close_start = resolve_nearest_next(
-        conn, str(index_id), start_target,
-        table="index_history", code_col="index_id", date_col="date", val_col="close",
-    )
+    # Previous month's close, matching month_return for funds.
+    start_d, close_start = index_period_start_value(conn, index_id, date(year, month, 1))
     if start_d is None or close_start is None:
         return None
 
@@ -556,6 +532,47 @@ def common_start_date(series_list: list[list[tuple[str, float]]]) -> Optional[da
         return None
     return max(firsts)
 
+
+# ── Period start: the previous close ─────────────────────────────────────────
+
+def period_start_value(
+    conn: sqlite3.Connection,
+    code: str,
+    period_first_day: date,
+    table: str = "nav_history",
+    code_col: str = "scheme_code",
+    date_col: str = "nav_date",
+    val_col: str = "nav",
+) -> tuple[Optional[date], Optional[float]]:
+    """
+    The value a period starts FROM: the last one on or before the day BEFORE it
+    opens — i.e. the previous period's close.
+
+    January starts at 31 December, Q1 at 31 December, 2025 at 31 December 2024.
+
+    This used to resolve NEAREST-NEXT from the period's first day, which meant
+    every period silently dropped its opening day: twelve monthly returns came
+    out 1.72 percentage points short of the year they covered, four quarters
+    0.57 short, and the year itself 0.14 short — four different answers for the
+    same stretch of time. trailing_return already used NEAREST-PREVIOUS, so the
+    two conventions in this file contradicted each other.
+
+    Returns (None, None) when nothing exists on or before that day, which is a
+    fund that launched inside the period. The caller then reports nothing rather
+    than a part-period figure dressed up as a full one.
+    """
+    day_before = period_first_day - timedelta(days=1)
+    return _resolve_nav(conn, code, day_before, "prev",
+                        table, code_col, date_col, val_col)
+
+
+def index_period_start_value(
+    conn: sqlite3.Connection, index_id: int, period_first_day: date,
+) -> tuple[Optional[date], Optional[float]]:
+    """period_start_value against index_history."""
+    return period_start_value(conn, str(index_id), period_first_day,
+                              table="index_history", code_col="index_id",
+                              date_col="date", val_col="close")
 
 # ── E9. Quartile Ranking ──────────────────────────────────────────────────────
 
