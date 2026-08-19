@@ -238,7 +238,11 @@ def build_indices(conn):
             "sparkline":    sparkline,
         })
 
-    write_json(out("indices.json"), {"as_of": TODAY.isoformat(), "indices": result})
+    # as_of is the newest close in the strip, not the run date. Stamping TODAY
+    # made the header read "As of 20 Aug" above 18 Aug closes whenever the market
+    # had not settled a bar yet -- the one date a reader actually checks.
+    newest = max((r["date"] for r in result), default=get_as_of(conn))
+    write_json(out("indices.json"), {"as_of": newest, "indices": result})
     log.info("✓ indices.json")
 
 
@@ -849,7 +853,8 @@ def build_quartiles(conn, cat_slug: str, mode: str = "quarterly"):
     ]
 
     payload = {
-        "as_of":          TODAY.isoformat(),
+        # The NAV date the quartiles were computed from, not the run date.
+        "as_of":          get_as_of(conn),
         "category_name":  cat_name,
         "mode":           mode,
         "period_labels":  period_labels,
@@ -894,7 +899,7 @@ def build_rolling(conn, cat_slug: str):
         fund_data.append({"scheme_code": sc, "scheme_name": name, "rolling": stats})
 
     write_json(out(f"rolling_{cat_slug}.json"), {
-        "as_of": TODAY.isoformat(), "category": cat_name, "funds": fund_data
+        "as_of": get_as_of(conn), "category": cat_name, "funds": fund_data
     })
     log.info("✓ rolling_%s.json", cat_slug)
 
@@ -936,7 +941,7 @@ def build_risk(conn, cat_slug: str):
     metrics_list = composite_risk_score(metrics_list, weights or None)
 
     write_json(out(f"risk_{cat_slug}.json"), {
-        "as_of":        TODAY.isoformat(),
+        "as_of":        get_as_of(conn),
         "category":     cat_name,
         "benchmark_id": bm_id,
         "risk_free_rate": rf,

@@ -31,6 +31,7 @@ sys.path.insert(0, ROOT_DIR)
 DB_PATH = os.path.join(ROOT_DIR, "data", "mf_research.db")
 
 from scripts.init_db import get_conn as _get_conn
+from scripts.build_db_from_api import previous_business_close
 
 logging.basicConfig(
     level=logging.INFO,
@@ -161,7 +162,11 @@ def run_index_backfill(conn: sqlite3.Connection, start: str = BACKFILL_START):
                 fetch_start = "2019-01-01"
             else:
                 fetch_start = start
-        fetch_end = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+        # Same cap as the NAVs (build_db_from_api.previous_business_close), so the
+        # dashboard's "as of" date means one thing. Without it the index strip can
+        # sit a day ahead of every fund number beside it, and a run that straddles
+        # a market session would store an intraday value as a close.
+        fetch_end = previous_business_close()
 
         if fetch_start >= fetch_end:
             log.info("  %-35s already up-to-date (%s)", index_name, last)
