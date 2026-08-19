@@ -48,6 +48,18 @@ export default function RollingP2P() {
   const activeSlug = slug || (allCats[0]?.slug ?? '')
   const catInfo = allCats.find(c => c.slug === activeSlug)
 
+  // Bound every picker to the data. Nothing exists after meta.as_of, so allowing
+  // a later date only produced an empty table with no explanation — the reader
+  // cannot tell "no data yet" from "something is broken".
+  const maxDate = meta?.as_of ?? new Date().toISOString().slice(0, 10)
+  const minDate = '2010-01-01'          // build_db_from_api.HISTORY_START
+
+  // A saved or default date can sit past the data after a stale day; clamp on
+  // read rather than rewriting state, so the picker cannot fight the user.
+  const anchor = anchorDate > maxDate ? maxDate : anchorDate
+  const from = startDate > maxDate ? maxDate : startDate
+  const to = endDate > maxDate ? maxDate : endDate
+
   // The fund list and benchmark id come from the category table, which is one
   // small file — cheaper than reading every NAV file just to learn who is in the
   // category.
@@ -66,9 +78,9 @@ export default function RollingP2P() {
   const bench: PeriodReturn = useMemo(() => {
     if (!benchSeries.length) return { ret: null, cagr: null, startDate: null, endDate: null, days: null }
     return mode === 'p2p'
-      ? pointToPoint(benchSeries, startDate, endDate)
-      : trailingFrom(benchSeries, anchorDate, window)
-  }, [benchSeries, mode, startDate, endDate, anchorDate, window])
+      ? pointToPoint(benchSeries, from, to)
+      : trailingFrom(benchSeries, anchor, window)
+  }, [benchSeries, mode, from, to, anchor, window])
 
   const rows: Row[] = useMemo(() => {
     const out: Row[] = []
@@ -76,8 +88,8 @@ export default function RollingP2P() {
       const s = series[code]
       if (!s) continue
       const r = mode === 'p2p'
-        ? pointToPoint(s, startDate, endDate)
-        : trailingFrom(s, anchorDate, window)
+        ? pointToPoint(s, from, to)
+        : trailingFrom(s, anchor, window)
       if (r.ret == null) continue
       out.push({
         code,
@@ -88,7 +100,7 @@ export default function RollingP2P() {
     }
     out.sort((a, b) => (b.r.ret ?? -Infinity) - (a.r.ret ?? -Infinity))
     return out
-  }, [codes, series, names, mode, startDate, endDate, anchorDate, window, bench.ret])
+  }, [codes, series, names, mode, from, to, anchor, window, bench.ret])
 
   const avg = average(rows.map(r => r.r.ret))
   const beat = bench.ret != null ? rows.filter(r => (r.r.ret ?? 0) > bench.ret!).length : null
@@ -105,53 +117,82 @@ export default function RollingP2P() {
   // ── benchmark comparison chart: category average vs benchmark, normalised ──
   const compareOption = useMemo(() => {
     if (!benchSeries.length || !rows.length) return null
-    const from = rows[0].r.startDate!
-    const to = rows[0].r.endDate!
+    const winFrom = rows[0].r.startDate!
+    const winTo = rows[0].r.endDate!
     const isLight = typeof document !== 'undefined' &&
       document.documentElement.getAttribute('data-theme') === 'light'
     const axis = isLight ? '#4B5563' : '#5E6F8F'
     const grid = isLight ? '#E5E7EB' : '#24314F'
 
-    // Rebase both to 0% at the window start so the shapes are comparable.
-    const clip = (s: Series) => s.filter(([d]) => d >= from && d <= to)
-    const norm = (s: Series) => {
-      const c = clip(s)
+    // Rebased to 0% at the window start, so the two shapes are comparable rather
+    // than sitting at unrelated levels.
+    const norm = (sr: Series): [number, number][] => {
+      const c = sr.filter(([d]) => d >= winFrom && d <= winTo)
       if (!c.length) return []
       const base = c[0][1]
-      return c.map(([d, v]) => [d, +(((v / base) - 1) * 100).toFixed(2)] as [string, number])
+      return c.map(([d, v]) => [Date.parse(d), +(((v / base) - 1) * 100).toFixed(2)])
     }
 
     const b = norm(benchSeries)
-    // Equal-weighted category line, built from whatever funds have a value on
-    // each date rather than only those present for the whole window.
-    const byDate = new Map<string, number[]>()
+    // Equal-weighted category line from whatever funds have a value on each date,
+    // rather than only those present for the whole window.
+    const byDate = new Map<number, number[]>()
     for (const code of codes) {
-      const s = series[code]
-      if (!s) continue
-      for (const [d, v] of norm(s)) {
-        if (!byDate.has(d)) byDate.set(d, [])
-        byDate.get(d)!.push(v)
+      const sr = series[code]
+      if (!sr) continue
+      for (const [t, v] of norm(sr)) {
+        if (!byDate.has(t)) byDate.set(t, [])
+        byDate.get(t)!.push(v)
       }
     }
-    const cat = [...byDate.entries()]
-      .sort((x, y) => (x[0] < y[0] ? -1 : 1))
-      .map(([d, vs]) => [d, +(vs.reduce((a, c) => a + c, 0) / vs.length).toFixed(2)])
+    const cat: [number, number][] = [...byDate.entries()]
+      .sort((x, y) => x[0] - y[0])
+      .map(([t, vs]) => [t, +(vs.reduce((a, c) => a + c, 0) / vs.length).toFixed(2)])
+
+    // A time axis, not a category axis. With a category axis every trading day
+    // became a tick — 250 overlapping labels for a one-year window. ECharts
+    // spaces a time axis by itself and switches granularity with the zoom.
+    const spanDays = (Date.parse(winTo) - Date.parse(winFrom)) / 86400000
+    const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const label = (ms: number) => {
+      const d = new Date(ms)
+      const yy = String(d.getUTCFullYear()).slice(2)
+      // Under ~4 months a day number is useful; beyond that it is clutter, and
+      // past ~3 years only the year carries information.
+      if (spanDays <= 120) return `${d.getUTCDate()} ${MON[d.getUTCMonth()]}`
+      if (spanDays <= 1100) return `${MON[d.getUTCMonth()]} ${yy}`
+      return `${d.getUTCFullYear()}`
+    }
 
     return {
       backgroundColor: 'transparent',
-      grid: { top: 26, right: 14, bottom: 30, left: 46 },
+      grid: { top: 28, right: 16, bottom: 26, left: 48 },
       legend: { top: 0, textStyle: { color: axis, fontSize: 10 }, itemWidth: 14, itemHeight: 8 },
       tooltip: {
         trigger: 'axis',
         backgroundColor: isLight ? '#FFFFFF' : '#18233C',
         borderColor: grid,
         textStyle: { color: isLight ? '#111827' : '#F1F5FB', fontSize: 11 },
-        valueFormatter: (v: number) => (v == null ? '—' : `${v > 0 ? '+' : ''}${v}%`),
+        axisPointer: { type: 'line', lineStyle: { color: grid } },
+        formatter: (ps: any[]) => {
+          if (!ps?.length) return ''
+          const d = new Date(ps[0].value[0])
+          const head = `<b>${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}</b>`
+          const body = ps.map(x => {
+            const v = x.value[1]
+            return `${x.marker} ${x.seriesName}: ${v > 0 ? '+' : ''}${v}%`
+          }).join('<br/>')
+          return `${head}<br/>${body}`
+        },
       },
       xAxis: {
-        type: 'category', data: cat.map(p => p[0]),
-        axisLabel: { color: axis, fontSize: 9, rotate: 30 },
-        axisLine: { lineStyle: { color: grid } }, splitLine: { show: false },
+        type: 'time',
+        min: Date.parse(winFrom),
+        max: Date.parse(winTo),
+        axisLabel: { color: axis, fontSize: 10, hideOverlap: true, formatter: label },
+        axisLine: { lineStyle: { color: grid } },
+        splitLine: { show: false },
       },
       yAxis: {
         type: 'value', name: '% from start', nameTextStyle: { color: axis, fontSize: 10 },
@@ -161,12 +202,11 @@ export default function RollingP2P() {
       series: [
         {
           name: 'Category avg', type: 'line', smooth: true, showSymbol: false,
-          data: cat.map(p => p[1]),
-          lineStyle: { width: 2, color: '#22D3EE' }, itemStyle: { color: '#22D3EE' },
+          data: cat, lineStyle: { width: 2, color: '#22D3EE' }, itemStyle: { color: '#22D3EE' },
         },
         {
           name: catInfo?.benchmark_name ?? 'Benchmark', type: 'line', smooth: true,
-          showSymbol: false, data: b.map(p => p[1]),
+          showSymbol: false, data: b,
           lineStyle: { width: 2, color: '#F59E0B', type: 'dashed' },
           itemStyle: { color: '#F59E0B' },
         },
@@ -203,7 +243,8 @@ export default function RollingP2P() {
             <>
               <div>
                 <label className="text-xs block mb-1" style={{ color: 'var(--text-mid)' }}>Anchor Date</label>
-                <input type="date" value={anchorDate} onChange={e => setAnchor(e.target.value)}
+                <input type="date" value={anchor} min={minDate} max={maxDate}
+                  onChange={e => setAnchor(e.target.value)}
                   className={dateInput} style={inputStyle} />
               </div>
               <div>
@@ -220,12 +261,14 @@ export default function RollingP2P() {
             <>
               <div>
                 <label className="text-xs block mb-1" style={{ color: 'var(--text-mid)' }}>Start Date</label>
-                <input type="date" value={startDate} onChange={e => setStart(e.target.value)}
+                <input type="date" value={from} min={minDate} max={to || maxDate}
+                  onChange={e => setStart(e.target.value)}
                   className={dateInput} style={inputStyle} />
               </div>
               <div>
                 <label className="text-xs block mb-1" style={{ color: 'var(--text-mid)' }}>End Date</label>
-                <input type="date" value={endDate} onChange={e => setEnd(e.target.value)}
+                <input type="date" value={to} min={from || minDate} max={maxDate}
+                  onChange={e => setEnd(e.target.value)}
                   className={dateInput} style={inputStyle} />
               </div>
             </>
@@ -249,47 +292,73 @@ export default function RollingP2P() {
         </div>
         {mode === 'p2p' && (
           <div className="text-[11px] mt-2" style={{ color: 'var(--text-low)' }}>
-            Start resolves to the first NAV on or after your date, end to the last on or before it,
-            so the window never reaches outside what you asked for. CAGR is shown beyond 366 days.
+            Start resolves to the first NAV on or after the chosen date, end to the last on or
+            before it, so the window stays inside the selected range. CAGR is shown beyond 366 days.
           </div>
         )}
       </div>
 
       {/* Table on the left, benchmark comparison on the right */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="xl:col-span-2 card overflow-hidden">
-          <div className="overflow-x-auto" style={{ maxHeight: 560 }}>
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+        <div className="xl:col-span-3 card overflow-hidden">
+          <div className="overflow-auto" style={{ maxHeight: 720 }}>
             <table className="data-table">
               <thead>
                 <tr>
                   <th style={{ width: 34 }}>#</th>
-                  <th className="text-left" style={{ minWidth: 230 }}>Fund</th>
+                  <th className="text-left" style={{ minWidth: 320 }}>Fund</th>
                   <th className="ret-cell">Return</th>
                   <th className="ret-cell">CAGR</th>
                   <th className="ret-cell">vs Benchmark</th>
                 </tr>
               </thead>
-              <tbody key={`${activeSlug}-${mode}-${window}-${startDate}-${endDate}`} className="rows-enter">
-                {rows.map((r, i) => (
-                  <tr key={r.code}>
-                    <td className="text-xs" style={{ color: 'var(--text-low)' }}>{i + 1}</td>
-                    <td className="text-left text-xs font-medium truncate" style={{ maxWidth: 240 }}
-                        title={r.name}>
-                      {shortFundName(r.name, 40)}
-                    </td>
-                    <td className={`ret-cell ${retColor(r.r.ret)}`}>{fmtPct(r.r.ret)}</td>
-                    <td className="ret-cell" style={{ color: 'var(--text-mid)' }}>
-                      {r.r.cagr != null ? fmtPct(r.r.cagr) : '—'}
-                    </td>
-                    <td className="ret-cell">
-                      {r.vsBench != null && (
-                        <span className={`spread-chip ${r.vsBench >= 0 ? 'pos' : 'neg'}`}>
-                          {r.vsBench >= 0 ? '+' : ''}{(r.vsBench * 100).toFixed(1)}%
+              <tbody key={`${activeSlug}-${mode}-${window}-${from}-${to}-${anchor}`} className="rows-enter">
+                {rows.map((r, i) => {
+                  // Rows are sorted by return, so the ends of the list ARE best and
+                  // worst. Marked with a tinted band, an edge and a label rather
+                  // than colour alone, which the return column already uses for sign.
+                  const isBest = rows.length > 1 && i === 0
+                  const isWorst = rows.length > 1 && i === rows.length - 1
+                  const tint = isBest ? 'rgba(52,211,153,0.10)'
+                    : isWorst ? 'rgba(248,113,113,0.10)' : undefined
+                  const edge = isBest ? 'var(--gain)' : isWorst ? 'var(--loss)' : 'transparent'
+                  const tag = (text: string, colour: string, bg: string) => (
+                    <span className="ml-2 px-1.5 py-0.5 rounded align-middle"
+                          style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
+                                   background: bg, color: colour }}>
+                      {text}
+                    </span>
+                  )
+                  return (
+                    <tr key={r.code}
+                        style={{ background: tint, boxShadow: `inset 3px 0 0 ${edge}` }}>
+                      <td className="text-xs" style={{ color: 'var(--text-low)' }}>{i + 1}</td>
+                      <td className="text-left text-xs font-medium" style={{ maxWidth: 340 }}
+                          title={r.name}>
+                        <span className="truncate inline-block align-middle"
+                              style={{ maxWidth: isBest || isWorst ? 248 : 330 }}>
+                          {shortFundName(r.name, 52)}
                         </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                        {isBest && tag('BEST', 'var(--gain)', 'rgba(52,211,153,0.18)')}
+                        {isWorst && tag('WORST', 'var(--loss)', 'rgba(248,113,113,0.18)')}
+                      </td>
+                      <td className={`ret-cell ${retColor(r.r.ret)}`}
+                          style={{ fontWeight: isBest || isWorst ? 700 : undefined }}>
+                        {fmtPct(r.r.ret)}
+                      </td>
+                      <td className="ret-cell" style={{ color: 'var(--text-mid)' }}>
+                        {r.r.cagr != null ? fmtPct(r.r.cagr) : '—'}
+                      </td>
+                      <td className="ret-cell">
+                        {r.vsBench != null && (
+                          <span className={`spread-chip ${r.vsBench >= 0 ? 'pos' : 'neg'}`}>
+                            {r.vsBench >= 0 ? '+' : ''}{(r.vsBench * 100).toFixed(1)}%
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
                 {!rows.length && (
                   <tr>
                     <td colSpan={5} className="text-center py-8" style={{ color: 'var(--text-low)' }}>
@@ -393,21 +462,29 @@ export default function RollingP2P() {
               <div className="px-4 py-3 text-xs space-y-1.5 border-t mt-auto"
                    style={{ borderColor: 'var(--line)' }}>
                 {best && (
-                  <div className="flex justify-between gap-2">
-                    <span className="truncate" style={{ color: 'var(--text-low)' }} title={best.name}>
-                      Best · {shortFundName(best.name, 22)}
+                  <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded"
+                       style={{ background: 'rgba(52,211,153,0.10)',
+                                boxShadow: 'inset 3px 0 0 var(--gain)' }}>
+                    <span className="truncate" title={best.name}>
+                      <span className="font-bold mr-1.5" style={{ color: 'var(--gain)', fontSize: 9,
+                            letterSpacing: '0.04em' }}>BEST</span>
+                      <span style={{ color: 'var(--text-mid)' }}>{shortFundName(best.name, 24)}</span>
                     </span>
-                    <span className={`tabnum font-semibold ${retColor(best.r.ret)}`}>
+                    <span className={`tabnum font-bold shrink-0 ${retColor(best.r.ret)}`}>
                       {fmtPct(best.r.ret)}
                     </span>
                   </div>
                 )}
                 {worst && worst !== best && (
-                  <div className="flex justify-between gap-2">
-                    <span className="truncate" style={{ color: 'var(--text-low)' }} title={worst.name}>
-                      Worst · {shortFundName(worst.name, 22)}
+                  <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded"
+                       style={{ background: 'rgba(248,113,113,0.10)',
+                                boxShadow: 'inset 3px 0 0 var(--loss)' }}>
+                    <span className="truncate" title={worst.name}>
+                      <span className="font-bold mr-1.5" style={{ color: 'var(--loss)', fontSize: 9,
+                            letterSpacing: '0.04em' }}>WORST</span>
+                      <span style={{ color: 'var(--text-mid)' }}>{shortFundName(worst.name, 24)}</span>
                     </span>
-                    <span className={`tabnum font-semibold ${retColor(worst.r.ret)}`}>
+                    <span className={`tabnum font-bold shrink-0 ${retColor(worst.r.ret)}`}>
                       {fmtPct(worst.r.ret)}
                     </span>
                   </div>
