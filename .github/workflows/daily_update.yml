@@ -71,6 +71,15 @@ jobs:
 
       # No database download. The scheme universe lives in the committed
       # catalogue (data/scheme_catalogue.json, ~777 KB); NAVs come from the API.
+      # The quartile rule is pinned in tests/test_quartile.py. Run it before
+      # spending 10 minutes on a pipeline whose central calculation has drifted:
+      # 10 of the 14 pinned bracket sizes change if the remainder goes back to
+      # Q1, and every published quartile would move with it.
+      - name: Check the quartile rule has not drifted
+        run: python tests/test_quartile.py
+        env:
+          PYTHONIOENCODING: utf-8
+
       - name: Verify scheme catalogue is present
         run: |
           test -f data/scheme_catalogue.json \
