@@ -31,8 +31,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from scripts.nav_store import (  # noqa: E402
-    MAX_SHRINK, folders_for, merge_amfi, nav_remote_path, parse_published,
-    summarise, validate,
+    MAX_ONE_DAY_MOVE, MAX_SHRINK, folders_for, merge_amfi, nav_remote_path,
+    parse_published, summarise, validate,
 )
 
 
@@ -183,6 +183,84 @@ def test_summarise_reports_the_span():
                       "2": {"2015-06-01": 3.0}})
     assert info == {"funds": 2, "rows": 3,
                     "oldest": "2010-01-01", "newest": "2026-08-19"}
+
+
+# ── the bad-data tripwire on AMFI's new day ────────────────────────────────
+#
+# This guard matters far more on this path than it did on the old one. Before,
+# a bad AMFI value landed in a throwaway database and the next run rebuilt the
+# whole history from api.mfapi.in, washing it out. Now the history IS what was
+# published, and AMFI cannot rewrite a day it has already given us — so one bad
+# value would be permanent and every later run would carry it forward.
+
+def test_a_redenomination_is_refused():
+    """Bandhan Short Duration Plan D: 12.03 restated as 22.16, a +84% jump."""
+    series = {"108719": {"2026-08-18": 12.0338}}
+    stats = merge_amfi(series, {"108719": ("2026-08-19", 22.1639)})
+    assert stats["rejected_move"] == 1
+    assert stats["extended"] == 0
+    assert series["108719"] == {"2026-08-18": 12.0338}, "history must be untouched"
+
+
+def test_the_widest_real_move_is_accepted():
+    """Franklin Asian Equity fell 1.386% — the extreme across 400 funds."""
+    series = {"1": {"2026-08-18": 45.6071}}
+    stats = merge_amfi(series, {"1": ("2026-08-19", 44.9748)})
+    assert stats["extended"] == 1
+    assert series["1"]["2026-08-19"] == 44.9748
+
+
+def test_a_new_fund_has_nothing_to_compare_against():
+    """No previous value means no move to judge; the day is simply taken."""
+    series = {"1": {}}
+    stats = merge_amfi(series, {"1": ("2026-08-19", 10.0)})
+    assert stats["extended"] == 1
+
+
+def test_the_tripwire_sits_far_above_any_market_move():
+    assert 0.20 <= MAX_ONE_DAY_MOVE <= 0.50
+
+
+# ── history must survive a fund changing category ─────────────────────────
+
+def test_a_recategorised_fund_is_read_from_where_it_actually_is():
+    """
+    A fund's file lives under its category, so recategorising it moves the path.
+    Looking only under the CURRENT category would make the history invisible, the
+    fund would be bootstrapped from mfapi, and on a day mfapi is also down it
+    would publish with one AMFI point — which the next run's gate would then
+    accept as the whole history. published_paths() reads the bucket listing so the
+    lookup does not depend on categorisation at all.
+    """
+    import scripts.nav_store as ns
+
+    # The catalogue thinks this fund is Flexi Cap; the bucket still has it under
+    # Large Cap, where yesterday's run put it.
+    listing = [{"name": "equity/large-cap/nav/103174.json"},
+               {"name": "equity/large-cap/category_trailing.json"},
+               {"name": "meta.json"}]
+
+    class FakeSB:
+        DATA_BUCKET = "MF Data"
+        @staticmethod
+        def enabled(): return True
+        @staticmethod
+        def list_objects(prefix, bucket=None): return listing
+
+    import sys
+    real = sys.modules.get("scripts.supabase_store")
+    sys.modules["scripts.supabase_store"] = FakeSB       # type: ignore[assignment]
+    try:
+        paths = ns.published_paths()
+    finally:
+        if real is not None:
+            sys.modules["scripts.supabase_store"] = real
+        else:
+            del sys.modules["scripts.supabase_store"]
+
+    assert paths == {"103174": "equity/large-cap/nav/103174.json"}, paths
+    # And it is NOT where the fund's new category would put it.
+    assert paths["103174"] != nav_remote_path("103174", "equity/flexi-cap")
 
 
 if __name__ == "__main__":

@@ -58,6 +58,12 @@ Series = dict[str, float]
 MIN_POINTS_FLOOR = 1
 MAX_SHRINK = 0.90         # may not fall below 90% of what is already published
 
+# Bad-data tripwire on the day AMFI adds, imported rather than restated so the
+# two AMFI paths cannot disagree about what counts as impossible. Measured across
+# 400 funds the widest real one-day move was 1.386%; this catches NAV
+# re-denominations, not market moves.
+from scripts.amfi_topup import MAX_ONE_DAY_MOVE  # noqa: E402
+
 # Parallel downloads. Supabase serves these from object storage and the limit is
 # the round trip, not our CPU; 16 keeps ~2,000 files under a minute without
 # tripping rate limits.
@@ -119,6 +125,40 @@ def parse_published(raw: bytes) -> Series:
     return out
 
 
+def published_paths() -> dict[str, str]:
+    """
+    {scheme_code: remote path} read from the BUCKET LISTING, not from a fund's
+    current category.
+
+    WHY THIS EXISTS
+    A fund's file lives under its category, so recategorising one moves its path.
+    AMFI does move funds — several changed header between snapshots while this was
+    being built. If the history were only ever looked for under the CURRENT
+    category, a recategorised fund would appear to have none, and the run would
+    bootstrap it from api.mfapi.in. That works, until the day mfapi is also
+    unavailable: the fund would then publish with nothing but AMFI's single day,
+    and the next run's gate would compare against that one-point file and accept
+    it. Sixteen years of history, gone quietly, with every later run faithfully
+    carrying the loss forward.
+
+    Listing the bucket costs one request and makes the lookup independent of
+    categorisation entirely.
+    """
+    from scripts import supabase_store as sb
+
+    if not sb.enabled():
+        return {}
+    out: dict[str, str] = {}
+    for obj in sb.list_objects("", bucket=sb.DATA_BUCKET):
+        name = obj.get("name") or ""
+        if "/nav/" not in name or not name.endswith(".json"):
+            continue
+        code = name.rsplit("/", 1)[-1][:-len(".json")]
+        if code.isdigit():
+            out[code] = name
+    return out
+
+
 def pull_many(codes_folders: dict[str, str], workers: int = WORKERS,
               on_progress=None) -> dict[str, Series]:
     """
@@ -136,10 +176,20 @@ def pull_many(codes_folders: dict[str, str], workers: int = WORKERS,
     lock = threading.Lock()
     done = 0
 
+    # Where each fund's file actually is, whatever category it sits in today.
+    # Falls back to the category-derived path for a fund the bucket has never
+    # held — which is exactly the set that needs bootstrapping anyway.
+    actual = published_paths()
+    moved = sum(1 for c, f in codes_folders.items()
+                if c in actual and actual[c] != nav_remote_path(c, f))
+    if moved:
+        log.info("%d fund(s) are published under a different category than they "
+                 "now belong to; reading their history from where it is", moved)
+
     def one(item):
         nonlocal done
         code, folder = item
-        raw = sb.download_bytes(nav_remote_path(code, folder),
+        raw = sb.download_bytes(actual.get(code) or nav_remote_path(code, folder),
                                 bucket=sb.DATA_BUCKET)
         series = parse_published(raw) if raw else {}
         with lock:
@@ -184,9 +234,18 @@ def merge_amfi(series_by_code: dict[str, Series],
     source a day earlier and rewriting history is exactly what this design is
     meant to avoid. `cap` (an ISO date) drops anything newer, so the previous-day
     rule stays in one place.
+
+    A NAV moving more than MAX_ONE_DAY_MOVE from the fund's last known value is
+    REFUSED. This guard matters far more here than it did on the old path.
+    Previously a bad AMFI value landed in a throwaway database and the next run
+    rebuilt the whole history from api.mfapi.in, washing it out. Now the history
+    IS what we published, and AMFI cannot rewrite a day it has already given us —
+    so one bad value would be baked in permanently and every future run would
+    faithfully carry it forward.
     """
     stats = {"extended": 0, "already_current": 0, "absent_from_amfi": 0,
-             "capped": 0}
+             "capped": 0, "rejected_move": 0}
+    rejected: list[tuple[str, float, str, float, float]] = []
     for code, series in series_by_code.items():
         row = amfi.get(str(code))
         if row is None:
@@ -204,8 +263,23 @@ def merge_amfi(series_by_code: dict[str, Series],
             # price it died at. Nothing to add.
             stats["already_current"] += 1
             continue
+        if series:
+            prev_date = max(series)
+            prev = series[prev_date]
+            if prev > 0 and abs(nav / prev - 1) > MAX_ONE_DAY_MOVE:
+                stats["rejected_move"] += 1
+                rejected.append((code, prev, d, nav, abs(nav / prev - 1)))
+                continue
         series[d] = nav
         stats["extended"] += 1
+
+    if rejected:
+        log.warning("AMFI: refused %d NAV(s) moving more than %.0f%% in a day — "
+                    "the series keeps its last published value:",
+                    len(rejected), MAX_ONE_DAY_MOVE * 100)
+        for code, prev, d, nav, move in sorted(rejected, key=lambda r: -r[4])[:10]:
+            log.warning("   %s  %.4f -> %s %.4f  (%.1f%%)",
+                        code, prev, d, nav, move * 100)
     return stats
 
 
