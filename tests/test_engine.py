@@ -34,8 +34,7 @@ from engine.calculation_engine import (
     normalize_series,
     common_start_date,
     point_to_point_return,
-    consistency_top5,
-    volatility_top5,
+    quartile_journeys,
 )
 
 
@@ -315,32 +314,106 @@ def test_point_to_point_cagr(db):
 
 
 # ── E10: Consistency / Volatility ────────────────────────────────────────────
+#
+# Both lists come off the SAME quartile history, and a CROSSING (a move between
+# Q1/Q2 and Q3/Q4) decides which list a fund lands in. The previous pair ranked
+# consistency on mean quartile and volatility on the standard deviation of
+# returns, so one fund could legitimately top both.
 
-def test_consistency_top5():
+GRIDS = {
+    # never leaves the top half -> consistent
+    "steady_q1":   [1, 1, 1, 2, 1, 1, 1, 1],
+    "steady_q2":   [2, 2, 1, 2, 2, 2, 2, 2],
+    # never leaves the BOTTOM half -> neither consistent nor volatile; it is a
+    # candidate for "worst" instead
+    "steady_q3":   [3, 3, 3, 3, 3, 3, 3, 3],
+    # crosses every period -> the most volatile thing here
+    "seesaw":      [1, 4, 1, 4, 1, 4, 1, 4],
+    # one dip into Q3: a single crossing pair, so volatile rather than consistent
+    "one_dip":     [1, 1, 1, 3, 1, 1, 1, 1],
+    # too short to judge
+    "too_short":   [1, 1, None, None, None, None, None, None],
+}
+
+
+def test_the_two_lists_never_share_a_fund():
+    j = quartile_journeys(GRIDS, min_periods=6)
+    consistent = {r["scheme_code"] for r in j["consistent"]}
+    volatile = {r["scheme_code"] for r in j["volatile"]}
+    assert not (consistent & volatile), consistent & volatile
+
+
+def test_consistent_means_mostly_in_the_top_half():
+    j = quartile_journeys(GRIDS, min_periods=6)
+    codes = [r["scheme_code"] for r in j["consistent"]]
+    assert "steady_q1" in codes and "steady_q2" in codes
+    # A fund parked in Q3 is consistent in the plain sense but is not a
+    # consistent PERFORMER, so it does not belong in this list.
+    assert "steady_q3" not in codes
+    # Nor does a fund that splits its time evenly.
+    assert "seesaw" not in codes
+
+
+def test_volatile_is_resolved_first_and_consistent_takes_what_is_left():
+    """
+    The owner's tie-break, applied between the lists rather than inside the
+    definition of consistent. "one_dip" is mostly Q1 -- it clears the top-share
+    bar -- but it crosses, so volatile claims it first.
+    """
+    j = quartile_journeys(GRIDS, min_periods=6)
+    assert "one_dip" in {r["scheme_code"] for r in j["volatile"]}
+    assert "one_dip" not in {r["scheme_code"] for r in j["consistent"]}
+
+
+def test_the_consistent_list_is_not_starved_by_a_single_slip():
+    """
+    Requiring zero crossings was tried and left 40 of 54 category files with an
+    empty box. A fund that dips once and is not among the top crossers must still
+    be able to appear.
+    """
     grids = {
-        "A": [1, 1, 1, 2, 1, 1, 1, 1],
-        "B": [2, 2, 1, 2, 2, 2, 2, 2],
-        "C": [3, 3, 3, 3, 3, 3, 3, 3],
-        "D": [1, 2, 3, 4, 1, 2, 3, 4],
-        "E": [None, None, 1, 1, 1, 1, 1, 1],   # only 6 valid → still eligible
+        # one dip each, so none is a top crosser once there are five of them
+        f"mostly_q1_{i}": [1, 1, 1, 3, 1, 1, 1, 1] for i in range(6)
     }
-    top5 = consistency_top5(grids, min_periods=6)
-    codes = [r["scheme_code"] for r in top5]
-    # E has avg_quartile=1.0 (6/6 are Q1), A has avg_quartile=1.125 → E correctly ranks first
-    assert codes[0] == "E"   # Perfect Q1 history → best avg quartile
-    assert codes[1] == "A"   # Second best
-    assert "C" not in codes[:2]
+    grids["seesaw"] = [1, 4, 1, 4, 1, 4, 1, 4]
+    j = quartile_journeys(grids, min_periods=6, limit=5)
+    assert j["volatile"][0]["scheme_code"] == "seesaw"
+    assert len(j["consistent"]) >= 1, "consistent must not be starved"
+    assert not ({r["scheme_code"] for r in j["consistent"]}
+                & {r["scheme_code"] for r in j["volatile"]})
 
 
-def test_volatility_top5():
-    import random
-    random.seed(42)
-    grids = {
-        "A": [0.30, 0.01, 0.25, -0.20, 0.15, 0.28, -0.18, 0.22],  # high σ
-        "B": [0.08, 0.09, 0.10, 0.08, 0.09, 0.10, 0.08, 0.09],     # low σ
-    }
-    top5 = volatility_top5(grids, min_periods=6)
-    assert top5[0]["scheme_code"] == "A"
+def test_volatile_is_ranked_by_how_often_it_crosses():
+    j = quartile_journeys(GRIDS, min_periods=6)
+    assert j["volatile"][0]["scheme_code"] == "seesaw"
+    assert j["volatile"][0]["crossings"] == 7
+
+
+def test_short_histories_are_excluded():
+    j = quartile_journeys(GRIDS, min_periods=6)
+    everywhere = {r["scheme_code"]
+                  for k in ("consistent", "volatile", "best", "worst")
+                  for r in j[k]}
+    assert "too_short" not in everywhere
+
+
+def test_best_and_worst_are_share_based():
+    """
+    Level, not stability — so they may overlap the other two lists, and a fund
+    that never left the bottom half must be the worst.
+    """
+    j = quartile_journeys(GRIDS, min_periods=6, extremes=3)
+    assert j["best"][0]["scheme_code"] == "steady_q1"
+    assert j["worst"][0]["scheme_code"] == "steady_q3"
+    assert len(j["best"]) == 3 and len(j["worst"]) == 3
+
+
+def test_shares_and_crossings_are_reported():
+    j = quartile_journeys({"seesaw": GRIDS["seesaw"]}, min_periods=6)
+    row = j["volatile"][0]
+    assert row["top_share"] == 0.5 and row["bottom_share"] == 0.5
+    assert row["balance"] == 0.5
+    assert row["periods"] == 8
 
 
 if __name__ == "__main__":

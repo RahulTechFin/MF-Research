@@ -1,0 +1,58 @@
+[
+  {
+    "scheme_code": "104486",
+    "scheme_name": "Invesco India Liquid Fund - Growth",
+    "amc_name": "Invesco Mutual Fund",
+    "category_name": "Liquid Fund",
+    "category_slug": "liquid",
+    "isin": "INF205K01HM5",
+    "is_active": 1,
+    "_rule": "live-duplicate",
+    "_reason": "duplicate live registration of one fund; kept the code whose name states the Regular plan",
+    "_kept_instead": [
+      "104488"
+    ]
+  },
+  {
+    "scheme_code": "104726",
+    "scheme_name": "Invesco India Low Duration Fund - Growth",
+    "amc_name": "Invesco Mutual Fund",
+    "category_name": "Low Duration",
+    "category_slug": "low-duration",
+    "isin": "INF205K01HY0",
+    "is_active": 1,
+    "_rule": "live-duplicate",
+    "_reason": "duplicate live registration of one fund; kept the code whose name states the Regular plan",
+    "_kept_instead": [
+      "104728"
+    ]
+  },
+  {
+    "scheme_code": "112123",
+    "scheme_name": "Invesco India Money Market Fund - Growth",
+    "amc_name": "Invesco Mutual Fund",
+    "category_name": "Money Market",
+    "category_slug": "money-market",
+    "isin": "INF205K01SD1",
+    "is_active": 1,
+    "_rule": "live-duplicate",
+    "_reason": "duplicate live registration of one fund; kept the code whose name states the Regular plan",
+    "_kept_instead": [
+      "112120"
+    ]
+  },
+  {
+    "scheme_code": "118907",
+    "scheme_name": "HSBC Liquid Fund - Growth",
+    "amc_name": "HSBC Mutual Fund",
+    "category_name": "Liquid Fund",
+    "category_slug": "liquid",
+    "isin": "INF336L01BL1",
+    "is_active": 1,
+    "_rule": "live-duplicate",
+    "_reason": "duplicate live registration of one fund; kept the code whose name states the Regular plan",
+    "_kept_instead": [
+      "118902"
+    ]
+  }
+]

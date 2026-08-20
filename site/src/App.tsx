@@ -13,6 +13,8 @@ import RollingP2P       from './sections/RollingP2P'
 import RiskLab          from './sections/RiskLab'
 import BlendStudio      from './sections/BlendStudio'
 import Watchlist        from './sections/Watchlist'
+import FundSearch       from './components/FundSearch'
+import type { FundHit } from './components/FundSearch'
 import { useMeta }      from './hooks/useData'
 import { useAdmin }     from './hooks/useAdmin'
 import { isEnabled, BUILD_SECTIONS, DEFAULT_TAB } from './config/profile'
@@ -75,6 +77,17 @@ export default function App() {
   // Shared state for fund comparison chart (Trend Finder)
   const [selectedFunds, setSelectedFunds] = useState<string[]>([])
 
+  // The fund chosen from the Ctrl+S search. Held here because the search box is
+  // global while the table that has to react to it is inside the screener tab.
+  const [focusFund, setFocusFund] = useState<FundHit | null>(null)
+
+  const handlePickFund = (hit: FundHit) => {
+    // Switching tab first, so the screener is mounted by the time it reads the
+    // focus and scrolls to it.
+    setActiveTab('screener')
+    setFocusFund(hit)
+  }
+
   const handleToggleCategory = (slug: string) => {
     setSelectedCategories(prev => {
       if (prev.includes(slug)) {
@@ -123,6 +136,8 @@ export default function App() {
   return (
     <div className="min-h-screen transition-colors duration-150" style={{ background: 'var(--bg-base)', color: 'var(--text-hi)' }}>
       {/* Hero header — fixed, always visible */}
+      <FundSearch onPick={handlePickFund} />
+
       <HeroHeader
         asOf={meta?.as_of ?? null}
         activeTab={activeTab}
@@ -163,6 +178,8 @@ export default function App() {
             <FundScreener
               selectedFunds={selectedFunds}
               onToggleFund={handleToggleFund}
+              focusFund={focusFund}
+              onFocusHandled={() => setFocusFund(null)}
             />
             <div className="my-6 border-b" style={{ borderColor: 'var(--line)', opacity: 0.4 }} />
             <TrendFinder

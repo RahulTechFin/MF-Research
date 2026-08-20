@@ -42,7 +42,7 @@ from engine.calculation_engine import (
     quarter_return,  quarter_return_index,
     month_return,    month_return_index,
     category_average, rank_and_quartile,
-    consistency_top5, volatility_top5,
+    quartile_journeys,
     risk_metrics, composite_risk_score,
     rolling_statistics,
 )
@@ -184,6 +184,42 @@ def build_meta(conn):
         "generated":  datetime.now(timezone.utc).isoformat(),
     })
     log.info("✓ meta.json")
+
+
+# ── funds_index.json (name search) ───────────────────────────────────────────
+
+def build_funds_index(conn):
+    """
+    Every fund's name, category and asset class in one small file.
+
+    The dashboard had no way to search by name. manifest.json maps a code to its
+    category but carries no names, and the category tables only hold one category
+    each -- so answering "which fund is this?" meant fetching all 41 of them.
+    One flat list is a few hundred KB and is fetched once, on the first search.
+
+    Names only, as the owner asked: no returns, no ranks. Those change daily and
+    would make this file a second, competing source for numbers that the category
+    tables already publish.
+    """
+    rows = conn.execute("""
+        SELECT s.scheme_code, s.scheme_name, a.amc_name,
+               c.slug, c.category_name, c.asset_class
+        FROM schemes s
+        JOIN categories c ON s.category_id = c.category_id
+        LEFT JOIN amcs a  ON s.amc_id = a.amc_id
+        WHERE s.is_active = 1
+        ORDER BY s.scheme_name
+    """).fetchall()
+
+    write_json(out("funds_index.json"), {
+        "as_of": get_as_of(conn),
+        "funds": [
+            {"code": r[0], "name": r[1], "amc": r[2],
+             "slug": r[3], "category": r[4], "asset_class": r[5]}
+            for r in rows
+        ],
+    })
+    log.info("✓ funds_index.json (%d funds)", len(rows))
 
 
 # ── indices.json (Market Pulse strip + sparklines) ────────────────────────────
@@ -370,7 +406,7 @@ def build_glance(conn, view: str = "trailing"):
         cell_avgs  = {k: fmt(v) for k, v in cell_avgs.items()}
         bm_vals    = {k: fmt(v) for k, v in bm_vals.items()}
 
-        rows.append({
+        row = {
             **row_obj,
             "category_id":   cat_id,
             "asset_class":   asset_class,
@@ -380,7 +416,36 @@ def build_glance(conn, view: str = "trailing"):
             "fund_count":    len(funds),
             "averages":      cell_avgs,
             "benchmark":     bm_vals,
-        })
+        }
+
+        # Sectoral/Thematic carries a breakdown: the same averages, per theme.
+        #
+        # The single row above blends banking with pharma and technology, so it
+        # describes no fund anyone can buy. Category Snapshot expands this row
+        # into one line per theme, and the numbers come from here rather than
+        # being averaged in the browser — the same reason every other figure on
+        # the screen is precomputed.
+        if slug == SECTORAL_THEMATIC_SLUG:
+            names = dict(conn.execute(
+                "SELECT scheme_code, scheme_name FROM schemes "
+                "WHERE category_id=? AND is_active=1", (cat_id,)))
+            by_sector: dict[str, list[str]] = {}
+            for sc in funds:
+                by_sector.setdefault(sector_of(names.get(sc, "")), []).append(sc)
+
+            row["sectors"] = [
+                {
+                    "sector": sector,
+                    "fund_count": len(codes),
+                    "averages": {p: category_average([fund_rets[sc][p] for sc in codes])
+                                 for p in row_obj["periods"]},
+                }
+                for sector in sorted(by_sector, key=lambda x: SECTOR_ORDER.get(x, 999))
+                for codes in [by_sector[sector]]
+            ]
+            log.info("   glance %s: %d sector rows", view, len(row["sectors"]))
+
+        rows.append(row)
 
     write_json(out(f"glance_{view}.json"), {"as_of": as_of, "view": view, "rows": rows})
     log.info("✓ glance_%s.json", view)
@@ -830,9 +895,14 @@ def build_quartiles(conn, cat_slug: str, mode: str = "quarterly"):
 
     # Consistency + Volatility boxes (E10). Roughly half the periods shown, so a
     # fund needs a real track record before it can top either list.
+    #
+    # Both lists are read off the SAME quartile history, which is what stops a
+    # fund appearing in both. The old pair ranked consistency on mean quartile and
+    # volatility on the standard deviation of returns -- different quantities off
+    # different inputs, so a fund that never left Q1 while swinging hard in
+    # absolute terms legitimately topped both. See engine.quartile_journeys.
     min_p = 6 if mode in ("quarterly", "monthly") else 4
-    top_consistent = consistency_top5(all_quartiles, min_periods=min_p)
-    top_volatile   = volatility_top5(returns_grid, min_periods=min_p)
+    journeys = quartile_journeys(all_quartiles, min_periods=min_p)
 
     fund_rows = [
         {
@@ -859,8 +929,12 @@ def build_quartiles(conn, cat_slug: str, mode: str = "quarterly"):
         "mode":           mode,
         "period_labels":  period_labels,
         "funds":          fund_rows,
-        "most_consistent":top_consistent,
-        "most_volatile":  top_volatile,
+        "most_consistent":journeys["consistent"],
+        "most_volatile":  journeys["volatile"],
+        # Level rather than stability, so these are share-based ("most of the
+        # time in Q1/Q2") and may overlap the two lists above by design.
+        "best_performers":  journeys["best"],
+        "worst_performers": journeys["worst"],
     }
     if sectors:
         # Tells the UI that quartiles here are sector-relative, and which
@@ -971,14 +1045,21 @@ def build_nav_series(conn, cat_slug: str):
     row = conn.execute("SELECT category_id FROM categories WHERE slug=?", (cat_slug,)).fetchone()
     if not row:
         return
+    # The name travels WITH the series. Trend Finder is handed bare fund codes
+    # (that is the whole point of the manifest lookup) and had no way to resolve
+    # one to a name, so every chart legend read "Fund 102434". Carrying the name
+    # here costs a few bytes a file and saves the client fetching a whole category
+    # table just to label a line.
     funds = conn.execute(
-        "SELECT scheme_code FROM schemes WHERE category_id=? AND is_active=1", (row[0],)
+        "SELECT scheme_code, scheme_name FROM schemes "
+        "WHERE category_id=? AND is_active=1", (row[0],)
     ).fetchall()
-    for (sc,) in funds:
+    for sc, name in funds:
         rows = conn.execute(
             "SELECT nav_date, nav FROM nav_history WHERE scheme_code=? ORDER BY nav_date", (sc,)
         ).fetchall()
-        write_json(out(f"nav/{sc}.json"), {"scheme_code": sc, "series": rows})
+        write_json(out(f"nav/{sc}.json"),
+                   {"scheme_code": sc, "scheme_name": name, "series": rows})
 
 
 # ── Category history series (category_history/{slug}.json) ─────────────────────
@@ -1007,7 +1088,44 @@ def build_category_history(conn, cat_slug: str):
         ORDER BY nav_date
     """, schemes).fetchall()
     
-    write_json(out(f"category_history/{cat_slug}.json"), {"category_slug": cat_slug, "series": rows})
+    payload = {"category_slug": cat_slug, "series": rows}
+
+    # Sectoral/Thematic gets one extra series PER SECTOR.
+    #
+    # AMFI files every theme under a single category, so the one average above
+    # blends banking funds with pharma and technology — a line that no fund
+    # actually tracks. Category Trends can now open the sector list and chart each
+    # theme's own average, which is the comparison a reader of that screen wants.
+    #
+    # These ride in the same file rather than one file per sector: there are ~22
+    # sectors, the series are the same shape, and the screen needs several at once
+    # to be worth anything.
+    if cat_slug == SECTORAL_THEMATIC_SLUG:
+        names = conn.execute(
+            "SELECT scheme_code, scheme_name FROM schemes "
+            "WHERE category_id=? AND is_active=1", (cat_id,)
+        ).fetchall()
+        by_sector: dict[str, list[str]] = {}
+        for sc, name in names:
+            by_sector.setdefault(sector_of(name), []).append(sc)
+
+        sectors = []
+        for sector in [s for s in SECTOR_ORDER if s in by_sector]:
+            codes = by_sector[sector]
+            ph = ",".join("?" for _ in codes)
+            series = conn.execute(f"""
+                SELECT nav_date, AVG(nav)
+                FROM nav_history
+                WHERE scheme_code IN ({ph}) AND nav_date >= '2010-01-01'
+                GROUP BY nav_date
+                ORDER BY nav_date
+            """, codes).fetchall()
+            sectors.append({"sector": sector, "fund_count": len(codes),
+                            "series": series})
+        payload["sectors"] = sectors
+        log.info("   %s: %d sector series", cat_slug, len(sectors))
+
+    write_json(out(f"category_history/{cat_slug}.json"), payload)
 
 
 # ── Index series (index/{index_id}.json) ─────────────────────────────────────
@@ -1031,6 +1149,7 @@ def main():
 
     build_meta(conn)
     build_indices(conn)
+    build_funds_index(conn)
 
     categories = conn.execute(
         "SELECT category_id, slug, asset_class FROM categories ORDER BY display_order"

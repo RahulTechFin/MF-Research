@@ -46,6 +46,10 @@ env:
   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
   SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
   SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
+  # Passed explicitly rather than relying on supabase_store's "MF Data" default,
+  # so the bucket this job reads history from and writes results to is visible
+  # here instead of being buried in a fallback.
+  SUPABASE_DATA_BUCKET: ${{ secrets.SUPABASE_DATA_BUCKET }}
 
 jobs:
   update:
@@ -84,6 +88,42 @@ jobs:
             || { echo "::error::data/scheme_catalogue.json is missing — run scripts/export_catalogue.py and commit it"; exit 1; }
           python -c "import json;d=json.load(open('data/scheme_catalogue.json'));print(f\"catalogue: {d['scheme_count']} schemes\")"
 
+      # Fail fast if the bucket is unreachable.
+      #
+      # This matters more than it used to. NAV history is now READ from Supabase
+      # and only extended by AMFI, so a run with the secrets missing does not
+      # merely fail at the end — it silently decides that all 2,051 funds are
+      # unpublished and bootstraps every one of them from api.mfapi.in. That
+      # still produces correct data, but it takes far longer and then fails at
+      # the publish step anyway. Better to stop here, before the expensive part.
+      #
+      # The read is anonymous on purpose: it proves the bucket is publicly
+      # readable, which is what the dashboard depends on.
+      - name: Check the Supabase connection
+        run: |
+          test -n "$SUPABASE_URL"             || { echo "::error::SUPABASE_URL secret is not set"; exit 1; }
+          test -n "$SUPABASE_SERVICE_KEY"             || { echo "::error::SUPABASE_SERVICE_KEY secret is not set"; exit 1; }
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, '.')
+          from scripts import supabase_store as sb
+          if not sb.enabled():
+              print(f"::error::Supabase not configured: {sb.why_disabled()}")
+              sys.exit(1)
+          objs = sb.list_objects("", bucket=sb.DATA_BUCKET)
+          print(f"bucket {sb.DATA_BUCKET!r}: {len(objs)} object(s)")
+          if not objs:
+              print("::warning::bucket is empty — every fund will be "
+                    "bootstrapped from api.mfapi.in, which is slow but correct")
+          raw = sb.download_bytes("meta.json", bucket=sb.DATA_BUCKET)
+          if raw is None and objs:
+              print("::error::cannot read meta.json from the bucket")
+              sys.exit(1)
+          print("Supabase read/write path OK")
+          PY
+        env:
+          PYTHONIOENCODING: utf-8
+
       # Pick up newly launched funds. api.mfapi.in has no category information,
       # so the universe comes from AMFI's own file, which carries the SEBI
       # category in its section headers.
@@ -103,7 +143,18 @@ jobs:
 
       # Builds a temp DB, runs the engine, writes JSON, deletes the DB.
       # Aborts before touching any JSON if the upstream data is bad or stale.
-      - name: Run daily pipeline (API -> engine -> JSON)
+      #
+      # NAV history is read back from Supabase and extended by AMFI's newest day
+      # (--history-source supabase, the default). It used to re-download every
+      # fund's entire history from api.mfapi.in on every run — ~3.5M rows and
+      # ~2,050 requests to rebuild files that had not changed below their last
+      # day. mfapi is now touched only to bootstrap a fund the bucket has never
+      # held. Pass --history-source mfapi to fall back to the old behaviour.
+      #
+      # NOTE this makes the run depend on the bucket it publishes to: if
+      # SUPABASE_* secrets are missing, every fund looks unpublished and the run
+      # bootstraps all of them from mfapi, which still works but is slow.
+      - name: Run daily pipeline (Supabase + AMFI -> engine -> JSON)
         run: |
           python scripts/daily_run.py \
             --workers 12 \
@@ -127,8 +178,13 @@ jobs:
       # ~15 min a deploy, ~450 min a month against a 300-min allowance. The site
       # reads /data/* straight from the bucket now, so the moment this finishes
       # the new data is live -- no deploy, no build minutes.
+      # --prune also REMOVES bucket objects this build no longer produces. Without
+      # it, every fund ever dropped from the catalogue left its nav/<code>.json
+      # behind for good; the dashboard never showed them (it follows
+      # manifest.json) but the bucket stopped reflecting what the site serves.
+      # It refuses to run if it would delete more than 40% of the bucket.
       - name: Publish data to Supabase
-        run: python scripts/publish_data.py
+        run: python scripts/publish_data.py --prune
         env:
           PYTHONIOENCODING: utf-8
 

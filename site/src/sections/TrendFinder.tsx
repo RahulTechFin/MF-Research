@@ -4,10 +4,33 @@ import { useState, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useMeta } from '../hooks/useData'
 import { shortFundName } from '../utils/format'
-import { navPath, dataUrl } from '../config/dataPaths'
+import { navPath, dataUrl, manifest } from '../config/dataPaths'
 
 const CHART_COLORS = ['#22D3EE', '#F472B6', '#8B5CF6', '#F59E0B', '#34D399']
 const TIMEFRAMES   = ['1M', '3M', '6M', '12M', '3Y', '5Y', 'All']
+
+/**
+ * Benchmarks always offered, whatever is selected. Held as names because
+ * index_id is assigned by the seed order and is not stable across rebuilds.
+ */
+const FIXED_BENCHMARKS: { name: string; dark: string; light: string }[] = [
+  { name: 'NIFTY 50',  dark: '#10B981', light: '#059669' },
+  { name: 'NIFTY 100', dark: '#A78BFA', light: '#8B5CF6' },
+  { name: 'NIFTY 500', dark: '#FBBF24', light: '#D97706' },
+]
+
+/** Palette for category benchmarks — cycled so two are told apart. */
+const CATEGORY_BM_COLORS = [
+  { dark: '#FB7185', light: '#E11D48' },
+  { dark: '#38BDF8', light: '#0284C7' },
+  { dark: '#A3E635', light: '#65A30D' },
+]
+
+/** Module-level so the benchmark palette can be resolved before render locals. */
+function isLightTheme(): boolean {
+  return typeof document !== 'undefined'
+    && document.documentElement.getAttribute('data-theme') === 'light'
+}
 
 interface Props {
   selectedFunds: string[]
@@ -27,8 +50,23 @@ export default function TrendFinder({ selectedFunds, onToggleFund }: Props) {
 
   // Sub-selections (which ones to toggle plot rendering)
   const [visibleFunds, setVisibleFunds] = useState<string[]>([])
-  const [plotNifty50, setPlotNifty50]   = useState(true)
-  const [plotNifty100, setPlotNifty100] = useState(false)
+
+  // Which benchmark index_ids are plotted. A Set rather than a boolean per index,
+  // because the list is no longer fixed: the selected funds' own category
+  // benchmark joins the three standing ones.
+  const [activeIndices, setActiveIndices] = useState<Set<number>>(new Set())
+
+  // Benchmarks for EVERY category the selected funds belong to.
+  //
+  // This used to be a single benchmark that fell to null as soon as the selection
+  // spanned two categories — so comparing a large cap against a mid cap silently
+  // removed the reference line, which looked like the chart resetting itself.
+  // Carrying one per represented category means adding a fund never takes a line
+  // away; it adds the benchmark that fund is measured against.
+  const [catBms, setCatBms] = useState<{ id: number; name: string }[]>([])
+  // Which category benchmarks have already been auto-enabled, so a deliberate
+  // deselection is not undone on the next render.
+  const [autoApplied, setAutoApplied] = useState<Set<number>>(new Set())
 
   // Loaded data maps
   const [fundData, setFundData] = useState<Record<string, FundSeries>>({})
@@ -73,36 +111,116 @@ export default function TrendFinder({ selectedFunds, onToggleFund }: Props) {
     })
   }, [selectedFunds])
 
-  // Fetch benchmark series dynamically
-  useEffect(() => {
-    if (!meta) return
-    const nifty50 = meta.benchmarks.find(b => b.index_name === 'NIFTY 50')
-    const nifty100 = meta.benchmarks.find(b => b.index_name === 'NIFTY 100')
-
-    const indexesToFetch = [
-      { id: nifty50?.index_id || 1, name: 'NIFTY 50' },
-      { id: nifty100?.index_id || 3, name: 'NIFTY 100' }
-    ]
-
-    indexesToFetch.forEach(idx => {
-      if (indexData[idx.id]) return // already fetched
-      fetch(`${import.meta.env.BASE_URL}data/index/${idx.id}.json`)
-        .then(r => r.json())
-        .then(d => {
-          setIndexData(prev => ({
-            ...prev,
-            [idx.id]: { label: idx.name, series: d.series as [string, number][] }
-          }))
-        })
-        .catch(() => {})
+  // The three standing benchmarks, resolved to ids once meta is in.
+  const fixed = FIXED_BENCHMARKS
+    .map(b => {
+      const found = meta?.benchmarks.find(x => x.index_name === b.name)
+      return found ? { ...b, id: found.index_id } : null
     })
+    .filter((b): b is typeof FIXED_BENCHMARKS[0] & { id: number } => b !== null)
+
+  // NIFTY 50 on by default, matching the previous behaviour.
+  useEffect(() => {
+    const n50 = meta?.benchmarks.find(b => b.index_name === 'NIFTY 50')
+    if (n50) setActiveIndices(prev => (prev.size === 0 ? new Set([n50.index_id]) : prev))
   }, [meta])
 
-  const nifty50Info = meta?.benchmarks.find(b => b.index_name === 'NIFTY 50')
-  const nifty100Info = meta?.benchmarks.find(b => b.index_name === 'NIFTY 100')
+  // Work out the selected funds' own category benchmark.
+  //
+  // Trend Finder is handed bare fund codes, so the category has to be recovered
+  // from the manifest (code -> "<asset-class>/<slug>") and then matched against
+  // meta.categories. Funds from different categories have no single "respective"
+  // benchmark, so that case resolves to null rather than picking one arbitrarily.
+  useEffect(() => {
+    if (!meta || selectedFunds.length === 0) {
+      setCatBms([])
+      return
+    }
+    let cancelled = false
+    manifest()
+      .then(m => {
+        if (cancelled) return
+        const slugs = new Set(
+          selectedFunds.map(c => (m.funds[c] ?? '').split('/')[1]).filter(Boolean))
+        const seen = new Set<number>()
+        const out: { id: number; name: string }[] = []
+        for (const slug of slugs) {
+          const cat = meta.categories.find(c => c.slug === slug)
+          if (cat?.benchmark_id && cat.benchmark_name && !seen.has(cat.benchmark_id)) {
+            seen.add(cat.benchmark_id)
+            out.push({ id: cat.benchmark_id, name: cat.benchmark_name })
+          }
+        }
+        setCatBms(out)
+      })
+      .catch(() => { if (!cancelled) setCatBms([]) })
+    return () => { cancelled = true }
+  }, [meta, selectedFunds])
+
+  // Switch each category benchmark on the first time it appears. Tracked by id,
+  // so turning one off stays off while a NEW category still brings its own on.
+  useEffect(() => {
+    const fresh = catBms.filter(b => !autoApplied.has(b.id))
+    if (!fresh.length) return
+    setActiveIndices(prev => {
+      const next = new Set(prev)
+      fresh.forEach(b => next.add(b.id))
+      return next
+    })
+    setAutoApplied(prev => {
+      const next = new Set(prev)
+      fresh.forEach(b => next.add(b.id))
+      return next
+    })
+  }, [catBms, autoApplied])
+
+  /** True when this id is a category benchmark rather than one of the fixed three. */
+  const isCategoryBm = (id: number) =>
+    catBms.some(b => b.id === id) && !fixed.some(f => f.id === id)
+
+  // Every benchmark that can be plotted right now, fixed plus category.
+  const plottable = [
+    ...fixed.map(b => ({ id: b.id, name: b.name,
+                         color: isLightTheme() ? b.light : b.dark })),
+    ...catBms
+      .filter(b => !fixed.some(f => f.id === b.id))
+      .map((b, i) => ({
+        id: b.id, name: b.name,
+        // Cycle the category palette so two category benchmarks are told apart.
+        color: isLightTheme()
+          ? CATEGORY_BM_COLORS[i % CATEGORY_BM_COLORS.length].light
+          : CATEGORY_BM_COLORS[i % CATEGORY_BM_COLORS.length].dark,
+      })),
+  ]
+
+  // Fetch the series for anything switched on that has not been loaded yet.
+  useEffect(() => {
+    plottable.forEach(b => {
+      if (!activeIndices.has(b.id) || indexData[b.id]) return
+      fetch(`${import.meta.env.BASE_URL}data/index/${b.id}.json`)
+        .then(r => r.json())
+        .then(d => setIndexData(prev => ({
+          ...prev, [b.id]: { label: b.name, series: d.series as [string, number][] },
+        })))
+        .catch(() => {})
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIndices, catBms, meta])
+
+  const toggleIndex = (id: number) =>
+    setActiveIndices(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  /** Benchmarks that are switched on AND have their data loaded. */
+  const activeBenchmarks = plottable.filter(
+    b => activeIndices.has(b.id) && indexData[b.id])
 
   // Theme colors
-  const isLight = typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light'
+  const isLight = isLightTheme()
   const axisColor = isLight ? '#4B5563' : '#5E6F8F'
   const lineColor = isLight ? '#E5E7EB' : '#24314F'
   const tooltipBg = isLight ? '#FFFFFF' : '#111A2E'
@@ -131,75 +249,118 @@ export default function TrendFinder({ selectedFunds, onToggleFund }: Props) {
   let dates: string[] = []
 
   const activeCodes = Object.keys(fundData).filter(code => visibleFunds.includes(code))
-  const showN50 = plotNifty50 && nifty50Info && indexData[nifty50Info.index_id]
-  const showN100 = plotNifty100 && nifty100Info && indexData[nifty100Info.index_id]
 
-  if (activeCodes.length > 0 || showN50 || showN100) {
-    // Find max date
+  if (activeCodes.length > 0 || activeBenchmarks.length > 0) {
+    // Every plotted series, funds and benchmarks alike, so the date range and the
+    // normalisation base are worked out once instead of once per hardcoded index.
+    const allSeries: [string, number][][] = [
+      ...activeCodes.map(code => fundData[code].series),
+      ...activeBenchmarks.map(b => indexData[b.id].series),
+    ]
+
     let maxDateStr = '2010-01-01'
-    activeCodes.forEach(code => {
-      const s = fundData[code].series
+    allSeries.forEach(s => {
       const lastDate = s[s.length - 1][0]
       if (lastDate > maxDateStr) maxDateStr = lastDate
     })
-    if (showN50) {
-      const s = indexData[nifty50Info!.index_id].series
-      const lastDate = s[s.length - 1][0]
-      if (lastDate > maxDateStr) maxDateStr = lastDate
-    }
-    if (showN100) {
-      const s = indexData[nifty100Info!.index_id].series
-      const lastDate = s[s.length - 1][0]
-      if (lastDate > maxDateStr) maxDateStr = lastDate
-    }
 
     const startDateStr = getStartDate(maxDateStr)
 
-    // Gather all distinct dates
     const allDates = new Set<string>()
-    activeCodes.forEach(code => {
-      fundData[code].series.forEach(([d]) => {
-        if (d >= startDateStr && d <= maxDateStr) allDates.add(d)
-      })
-    })
-    if (showN50) {
-      indexData[nifty50Info!.index_id].series.forEach(([d]) => {
-        if (d >= startDateStr && d <= maxDateStr) allDates.add(d)
-      })
-    }
-    if (showN100) {
-      indexData[nifty100Info!.index_id].series.forEach(([d]) => {
-        if (d >= startDateStr && d <= maxDateStr) allDates.add(d)
-      })
-    }
+    allSeries.forEach(s => s.forEach(([d]) => {
+      if (d >= startDateStr && d <= maxDateStr) allDates.add(d)
+    }))
     dates = Array.from(allDates).sort()
 
     // Helper to calculate normalised series
     const buildNormalisedSeries = (series: [string, number][], name: string, color: string, isDash = false) => {
-      const rawMap = new Map(series)
-      let baseVal = 1.0
-      for (const d of dates) {
-        const val = rawMap.get(d)
-        if (val !== undefined && val !== null) {
-          baseVal = val
-          break
-        }
+      // [date, percent] pairs for a TIME axis, rather than one value per shared
+      // category. A category axis needed 4,084 categories on the "All" range and
+      // every series padded out to that length with nulls; a time axis lets each
+      // series carry only the points it actually has, which is both fewer objects
+      // and more honest — a fund launched last year no longer trails a long run
+      // of nulls across the chart.
+      //
+      // Each series is rebased on ITS OWN first value inside the window, so a
+      // fund younger than the timeframe still starts at 0% rather than inheriting
+      // a number from a date it did not exist for. That first in-range point IS
+      // the base, which is why this no longer builds a Map and re-scans the
+      // shared date list to find it.
+      const raw: [string, number][] = []
+      for (const [d, val] of series) {
+        if (d < startDateStr || d > maxDateStr || val == null || val <= 0) continue
+        raw.push([d, val])
       }
+      if (!raw.length) return
 
-      const values = dates.map(d => {
-        const val = rawMap.get(d)
-        if (val === undefined || val === null) return null
-        return parseFloat((((val / baseVal) - 1) * 100).toFixed(2))
-      })
+      const baseVal = raw[0][1]
+      const points: [string, number][] = raw.map(
+        ([d, val]) => [d, parseFloat((((val / baseVal) - 1) * 100).toFixed(2))])
+
+      const last = points[points.length - 1]
 
       chartSeries.push({
         name,
         type: 'line',
-        data: values,
-        smooth: true,
+        data: points,
+        // Smoothing thousands of sub-pixel points costs real time and changes
+        // nothing you can see. Only worth it when the series is short enough for
+        // the curve to matter.
+        smooth: points.length <= 400,
         showSymbol: false,
-        lineStyle: { width: isDash ? 1.5 : 2, type: isDash ? 'dashed' : 'solid' },
-        itemStyle: { color }
+        // Largest-Triangle-Three-Buckets: ECharts reduces each series to about
+        // one point per pixel while preserving the shape of the line. This is
+        // what keeps the "All" range (~26,000 points across nine series)
+        // responsive instead of stuttering on every hover.
+        sampling: 'lttb',
+        // Benchmarks are dashed and a touch lighter, so a fund line always reads
+        // as the subject and the benchmark as the reference behind it.
+        lineStyle: {
+          width: isDash ? 2 : 2.5,
+          type: isDash ? [6, 4] : 'solid',
+          color,
+          opacity: isDash ? 0.85 : 1,
+          // No shadow: a blurred stroke is composited per point, which was the
+          // single most expensive thing on the chart, and the area wash below
+          // already separates a fund line from a benchmark.
+        },
+        itemStyle: { color },
+        // A funds-only wash that fades downwards, so several can overlap without
+        // stacking into mud. Benchmarks get none — they are the reference, not
+        // the subject.
+        areaStyle: isDash ? undefined : {
+          opacity: 0.9,
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0,   color: color + '2E' },
+              { offset: 0.6, color: color + '10' },
+              { offset: 1,   color: color + '00' },
+            ],
+          },
+        },
+        emphasis: { focus: 'series', lineStyle: { width: isDash ? 2.5 : 3.5 } },
+        // The final value, printed at the end of the line. This is the number a
+        // reader actually wants and previously had to hover for.
+        markPoint: {
+          symbol: 'circle',
+          symbolSize: 7,
+          silent: true,
+          itemStyle: { color, borderColor: 'var(--bg-card)', borderWidth: 2 },
+          label: {
+            show: true,
+            position: 'right',
+            distance: 6,
+            formatter: () => `${last[1] >= 0 ? '+' : ''}${last[1].toFixed(1)}%`,
+            color,
+            fontSize: 10,
+            fontWeight: isDash ? 'normal' : 'bold',
+          },
+          // A time axis takes the date itself as the coordinate, so this no
+          // longer depends on the series being aligned to a shared index.
+          data: [{ coord: [last[0], last[1]] }],
+        },
+        z: isDash ? 2 : 3,
       })
     }
 
@@ -210,43 +371,112 @@ export default function TrendFinder({ selectedFunds, onToggleFund }: Props) {
     })
 
     // Add benchmarks as dashed lines
-    if (showN50 && nifty50Info) {
-      buildNormalisedSeries(indexData[nifty50Info.index_id].series, 'NIFTY 50', isLight ? '#059669' : '#10B981', true)
-    }
-    if (showN100 && nifty100Info) {
-      buildNormalisedSeries(indexData[nifty100Info.index_id].series, 'NIFTY 100', isLight ? '#8B5CF6' : '#A78BFA', true)
-    }
+    activeBenchmarks.forEach(b => {
+      buildNormalisedSeries(indexData[b.id].series, b.name, b.color, true)
+    })
   }
 
   const option = {
     backgroundColor: 'transparent',
-    grid: { top: 40, right: 30, bottom: 40, left: 55 },
+    // Extra right margin so the end-of-line value labels are not clipped.
+    grid: { top: 46, right: 78, bottom: 40, left: 55 },
+    // A TIME axis, not 4,084 categories. Beyond being far cheaper to lay out, it
+    // spaces points by actual date — a category axis draws a market holiday the
+    // same width as a trading day — and it labels itself sensibly at any zoom
+    // instead of needing an `interval` guess. Format follows the span so a
+    // one-month view shows days and a five-year view shows years.
     xAxis: {
-      type: 'category',
-      data: dates,
+      type: 'time',
+      min: dates.length ? dates[0] : undefined,
+      max: dates.length ? dates[dates.length - 1] : undefined,
       axisLine:  { lineStyle: { color: lineColor } },
-      axisLabel: { color: axisColor, fontSize: 10, interval: Math.floor(dates.length / 8) },
-      splitLine: { show: false },
+      axisLabel: {
+        color: axisColor,
+        fontSize: 10,
+        hideOverlap: true,
+        formatter: {
+          year: '{yyyy}', month: "{MMM} '{yy}", day: '{d} {MMM}',
+        },
+      },
+      // Faint vertical gridlines, so a point can be traced back to its date
+      // without hovering. Solid and very low contrast; dashed in both directions
+      // reads as graph paper.
+      splitLine: { show: true, lineStyle: { color: lineColor, opacity: 0.35 } },
+      axisTick: { show: false },
     },
     yAxis: {
       type: 'value',
       axisLine:  { show: false },
+      axisTick:  { show: false },
       axisLabel: { color: axisColor, fontSize: 10, formatter: (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(0)}%` },
       splitLine: { lineStyle: { color: lineColor, type: 'dashed' } },
+      splitNumber: 5,
     },
     tooltip: {
       trigger: 'axis',
       backgroundColor: tooltipBg,
       borderColor: tooltipBorder,
       textStyle: { color: tooltipText, fontSize: 11 },
-      axisPointer: { lineStyle: { color: 'var(--accent-a)', width: 1, type: 'dashed' } },
+      // Best to worst rather than series order, so the ranking on a given day is
+      // readable without comparing numbers by eye.
+      order: 'valueDesc',
+      valueFormatter: (v: number | null) =>
+        v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`,
+      // A full-height crosshair with the date in a pill at the axis, so the
+      // reading is unambiguous across nine overlapping lines.
+      axisPointer: {
+        type: 'line',
+        snap: true,
+        lineStyle: { color: axisColor, width: 1, type: [4, 4] },
+        label: {
+          show: true,
+          backgroundColor: tooltipBg,
+          borderColor: tooltipBorder,
+          borderWidth: 1,
+          color: tooltipText,
+          fontSize: 10,
+          formatter: (p: { value: number | string }) =>
+            new Date(p.value).toLocaleDateString('en-GB',
+              { day: '2-digit', month: 'short', year: 'numeric' }),
+        },
+      },
+      extraCssText: 'border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.35);',
     },
     legend: {
       show: true,
       top: 5,
+      icon: 'roundRect',
+      itemWidth: 14,
+      itemHeight: 3,
       textStyle: { color: isLight ? '#1F2937' : '#9FB0CC', fontSize: 11 },
     },
-    series: chartSeries,
+    // Draw in chunks rather than blocking on the whole dataset, and skip the
+    // entry animation once there is enough on screen for it to be felt.
+    progressive: 2000,
+    progressiveThreshold: 4000,
+    animation: chartSeries.reduce((n, s) => n + (s.data?.length ?? 0), 0) < 6000,
+    series: chartSeries.length
+      ? [
+          {
+            ...chartSeries[0],
+            // Every series is rebased to 0% at the start of the window, so that
+            // line is the reference the whole chart is read against. Drawn once,
+            // on the first series, rather than as its own entry — a separate
+            // series would appear in the legend as something selectable.
+            markLine: {
+              silent: true,
+              symbol: 'none',
+              lineStyle: { color: axisColor, width: 1, opacity: 0.5 },
+              label: {
+                show: true, position: 'insideEndTop', formatter: '0%',
+                color: axisColor, fontSize: 9,
+              },
+              data: [{ yAxis: 0 }],
+            },
+          },
+          ...chartSeries.slice(1),
+        ]
+      : [],
   }
 
   return (
@@ -276,7 +506,7 @@ export default function TrendFinder({ selectedFunds, onToggleFund }: Props) {
                       className="cursor-pointer"
                     />
                     <span className="truncate max-w-[160px]">
-                      {fundData[code]?.label.replace(/Regular/gi, '').replace(/Growth/gi, '').trim() || code}
+                      {fundData[code] ? shortFundName(fundData[code].label, 22) : code}
                     </span>
                   </label>
                 ))}
@@ -284,30 +514,62 @@ export default function TrendFinder({ selectedFunds, onToggleFund }: Props) {
             )}
           </div>
 
-          {/* Right side: Fixed Benchmarks checkboxes */}
-          <div className="shrink-0 flex flex-col gap-1 border-t md:border-t-0 md:border-l border-[var(--line)] pt-3 md:pt-0 md:pl-4">
-            <div className="text-xs font-semibold mb-1" style={{ color: 'var(--text-mid)' }}>
-              Fixed Benchmarks:
+          {/* Right side: benchmark toggles.
+              Chips rather than checkboxes, each carrying a dashed swatch in its
+              own series colour — so the control reads as a legend you can click
+              and the chart needs no separate key. An off chip stays outlined
+              instead of greying out, which keeps the row from jumping as
+              selections change. */}
+          <div className="shrink-0 border-t md:border-t-0 md:border-l border-[var(--line)]
+                          pt-3 md:pt-0 md:pl-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider"
+                    style={{ color: 'var(--text-low)' }}>
+                Benchmarks
+              </span>
+              <span className="text-[10px] px-1.5 rounded-full"
+                    style={{ background: 'var(--bg-raised)', color: 'var(--text-low)' }}>
+                {activeIndices.size}
+              </span>
             </div>
-            <div className="flex md:flex-col gap-3 md:gap-1">
-              <label className="flex items-center gap-2 text-xs font-medium cursor-pointer" style={{ color: isLight ? '#059669' : '#10B981' }}>
-                <input
-                  type="checkbox"
-                  checked={plotNifty50}
-                  onChange={() => setPlotNifty50(!plotNifty50)}
-                  className="cursor-pointer"
-                />
-                NIFTY 50
-              </label>
-              <label className="flex items-center gap-2 text-xs font-medium cursor-pointer" style={{ color: isLight ? '#8B5CF6' : '#A78BFA' }}>
-                <input
-                  type="checkbox"
-                  checked={plotNifty100}
-                  onChange={() => setPlotNifty100(!plotNifty100)}
-                  className="cursor-pointer"
-                />
-                NIFTY 100
-              </label>
+            <div className="flex md:flex-col gap-1.5 flex-wrap">
+              {plottable.map(b => {
+                const on = activeIndices.has(b.id)
+                const auto = isCategoryBm(b.id)
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => toggleIndex(b.id)}
+                    aria-pressed={on}
+                    title={auto
+                      ? `Benchmark for a selected fund’s category. Turned on automatically — click to hide it.`
+                      : on ? `Hide ${b.name}` : `Show ${b.name}`}
+                    className="group flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-full
+                               text-[11px] font-medium transition-all duration-150"
+                    style={{
+                      background: on ? `${b.color}1F` : 'transparent',
+                      border: `1px solid ${on ? b.color : 'var(--line)'}`,
+                      color: on ? b.color : 'var(--text-mid)',
+                      cursor: 'pointer',
+                    }}>
+                    {/* Dashed swatch: exactly how the line is drawn. */}
+                    <span aria-hidden style={{
+                      width: 16, height: 0, flexShrink: 0,
+                      borderTop: `2px dashed ${on ? b.color : 'var(--text-low)'}`,
+                      opacity: on ? 1 : 0.55,
+                    }} />
+                    <span className="truncate" style={{ maxWidth: 132 }}>{b.name}</span>
+                    {auto && (
+                      <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.06em',
+                                     padding: '1px 4px', borderRadius: 999,
+                                     background: on ? `${b.color}2E` : 'var(--bg-raised)',
+                                     color: on ? b.color : 'var(--text-low)' }}>
+                        AUTO
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>
@@ -327,7 +589,7 @@ export default function TrendFinder({ selectedFunds, onToggleFund }: Props) {
           <div className="flex items-center justify-center py-20">
             <div className="skeleton w-full h-80" />
           </div>
-        ) : selectedFunds.length === 0 && !plotNifty50 && !plotNifty100 ? (
+        ) : activeCodes.length === 0 && activeBenchmarks.length === 0 ? (
           <div className="flex items-center justify-center py-16 flex-col gap-2"
             style={{ color: 'var(--text-mid)', border: '1px dashed var(--line)', borderRadius: 8 }}>
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">

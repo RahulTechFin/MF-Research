@@ -37,6 +37,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import shutil
 import collections
 import json
 import logging
@@ -59,10 +60,12 @@ DATA_DIR = os.environ.get("MF_OUTPUT_DIR") or os.path.join(
     ROOT_DIR, "site", "public", "data")
 
 # Files that are not category-scoped and stay at the bucket root.
-GLOBAL_FILES = re.compile(r"^(meta|indices|glance_[a-z]+|watchlist_[a-z]+)\.json$")
+GLOBAL_FILES = re.compile(
+    r"^(meta|indices|funds_index|glance_[a-z]+|watchlist_[a-z]+)\.json$")
 
-ASSET_FOLDER = {"Equity": "equity", "Hybrid": "hybrid",
-                "Debt": "debt", "Other": "other"}
+# Defined in init_db, beside the asset classes it maps, so the publisher and
+# nav_store cannot disagree about where a file lives.
+from scripts.init_db import ASSET_FOLDER  # noqa: E402
 
 
 def load_maps() -> tuple[dict[str, str], dict[str, str]]:
@@ -176,6 +179,30 @@ def print_plan(items, skipped):
                     len(skipped), ", ".join(skipped[:6]))
 
 
+def build_manifest(slug_ac: dict[str, str], code_slug: dict[str, str]) -> dict:
+    """
+    The manifest object, built in ONE place.
+
+    This used to be inlined in write_manifest while write_local_tree assembled its
+    own copy, and the two disagreed: the local file mapped a fund code to a bare
+    slug ("large-cap") where the uploaded one mapped it to "<asset>/<slug>"
+    ("equity/large-cap"). navPath() concatenates that value straight into a URL, so
+    on a locally served build every nav fetch resolved to a path that does not
+    exist -- Trend Finder drew no fund lines and Rolling & Point-to-Point showed an
+    empty table, while the category screens kept working because they resolve
+    through `categories` instead. Two builders for one file was the bug.
+    """
+    return {
+        "version": 1,
+        "generated": datetime.now().astimezone().isoformat(timespec="seconds"),
+        # slug -> "equity" | "hybrid" | "debt" | "other"
+        "categories": slug_ac,
+        # scheme_code -> "<asset-class>/<slug>", the folder holding its nav file
+        "funds": {code: slug_ac[slug] + "/" + slug
+                  for code, slug in code_slug.items() if slug in slug_ac},
+    }
+
+
 def write_manifest(sb, slug_ac: dict[str, str], code_slug: dict[str, str]) -> bool:
     """
     Publish manifest.json: how to find anything in this bucket.
@@ -189,15 +216,7 @@ def write_manifest(sb, slug_ac: dict[str, str], code_slug: dict[str, str]) -> bo
     One small lookup, fetched once and cached, keeps path-building in one place.
     About 65 KB, ~20 KB on the wire after Supabase gzips it.
     """
-    manifest = {
-        "version": 1,
-        "generated": datetime.now().astimezone().isoformat(timespec="seconds"),
-        # slug -> "equity" | "hybrid" | "debt" | "other"
-        "categories": slug_ac,
-        # scheme_code -> "<asset-class>/<slug>", the folder holding its nav file
-        "funds": {code: slug_ac[slug] + "/" + slug
-                  for code, slug in code_slug.items() if slug in slug_ac},
-    }
+    manifest = build_manifest(slug_ac, code_slug)
     body = json.dumps(manifest, separators=(",", ":")).encode("utf-8")
     ok = sb.upload_bytes(body, "manifest.json", bucket=sb.DATA_BUCKET,
                          content_type="application/json",
@@ -241,6 +260,148 @@ def verify(sb) -> int:
     return 0
 
 
+def write_local_tree(out_dir: str, only: str | None) -> int:
+    """
+    Materialise the published layout on disk.
+
+    The engine writes flat names (category_large-cap_trailing.json); the site
+    asks for equity/large-cap/category_trailing.json and resolves the asset class
+    through manifest.json. Uploading was the only thing that ever performed that
+    rearrangement, so a locally built dataset was unreadable by the local site --
+    which is why `npm run dev` kept showing whatever was last published.
+
+    Stale files are removed, so the result is exactly what an upload would leave.
+    """
+    out_dir = os.path.abspath(out_dir)
+    # Writing the tree into the directory it reads from is destructive and not
+    # idempotent: remote_path() does not recognise tree paths, so on a second run
+    # every file already in the tree counts as stale and is deleted. Keep the
+    # engine's flat output somewhere separate and point this at the site.
+    if os.path.normcase(out_dir) == os.path.normcase(os.path.abspath(DATA_DIR)):
+        log.error("--to-dir must differ from the source directory (%s).", DATA_DIR)
+        log.error("Build the flat output elsewhere first, e.g.:")
+        log.error("  MF_OUTPUT_DIR=build/data-flat python scripts/daily_run.py")
+        log.error("  MF_OUTPUT_DIR=build/data-flat python scripts/publish_data.py "
+                  "--to-dir site/public/data")
+        return 1
+
+    slug_ac, code_slug = load_maps()
+    items, skipped = build_plan(only)
+    if not items:
+        log.error("Nothing to write from %s", DATA_DIR)
+        return 1
+
+    log.info("=" * 62)
+    log.info("WRITE LOCAL TREE  ->  %s", out_dir)
+    log.info("=" * 62)
+    print_plan(items, skipped)
+
+    # Every copy happens before any deletion, which is what makes it safe to
+    # write the tree into the directory the flat files came from: a flat source
+    # is only removed after it has been copied to its place in the tree.
+    written = {}
+    for src, dest in items:
+        target = os.path.join(out_dir, dest.replace("/", os.sep))
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        # The global files (meta.json, glance_*, index/*) keep their path, so
+        # source and target are the same file and copyfile would raise.
+        if os.path.normcase(os.path.abspath(src)) != os.path.normcase(target):
+            shutil.copyfile(src, target)
+        written[os.path.normcase(target)] = True
+
+    # manifest.json is generated, not copied — the site cannot resolve a single
+    # path without it.
+    # Built by the SAME function the upload uses; see build_manifest for what
+    # went wrong when there were two.
+    manifest = build_manifest(slug_ac, code_slug)
+    mpath = os.path.join(out_dir, "manifest.json")
+    with open(mpath, "w", encoding="utf-8") as fh:
+        json.dump(manifest, fh, separators=(",", ":"))
+    written[os.path.normcase(mpath)] = True
+    log.info("manifest.json: %d categories, %d funds (%.0f KB)",
+             len(slug_ac), len(code_slug), os.path.getsize(mpath) / 1024)
+
+    # Anything left behind is from an older build. The flat files the engine
+    # emitted into this directory are included in that: they are superseded by
+    # the tree and would otherwise sit there looking authoritative.
+    removed, locked = 0, 0
+    for root, _dirs, files in os.walk(out_dir, topdown=False):
+        for f in files:
+            full = os.path.join(root, f)
+            if os.path.normcase(full) not in written:
+                try:
+                    os.remove(full)
+                    removed += 1
+                except OSError:
+                    locked += 1
+        # An emptied directory is tidiness, not correctness. OneDrive holds a
+        # handle on directories it is syncing and rmdir raises WinError 5, which
+        # is no reason to fail a build whose files are already all in place.
+        if (os.path.normcase(root) != os.path.normcase(out_dir)
+                and not os.listdir(root)):
+            try:
+                os.rmdir(root)
+            except OSError:
+                pass
+    if locked:
+        log.warning("%d stale file(s) could not be deleted (locked); they are "
+                    "not referenced by the site", locked)
+    log.info("wrote %s file(s); removed %s stale file(s)",
+             format(len(written), ","), format(removed, ","))
+    return 0
+
+
+# A run that would remove more than this share of the bucket is treated as a bad
+# build rather than a cleanup. Pruning follows a successful upload, so the only
+# way to reach that number is a plan that collapsed -- and deleting most of the
+# published data on the strength of it would take the dashboard down.
+MAX_PRUNE_FRACTION = 0.40
+
+
+def prune_remote(sb, keep: set[str], apply: bool) -> int:
+    """
+    Delete bucket objects the current build no longer produces.
+
+    Publishing only ever uploaded, so every fund ever removed from the catalogue
+    left its nav/<code>.json behind -- 855 of them after the universe was pruned
+    to funds AMFI still tracks. Those files are invisible to the dashboard, which
+    only follows manifest.json, but they are real objects taking real space and
+    they make the bucket a poor record of what the site actually serves.
+    """
+    remote = {o["name"] for o in sb.list_objects("", bucket=sb.DATA_BUCKET)}
+    if not remote:
+        log.warning("bucket listing came back empty; skipping the prune rather "
+                    "than assuming everything is stale")
+        return 0
+
+    stale = sorted(remote - keep)
+    if not stale:
+        log.info("prune: nothing stale in the bucket")
+        return 0
+
+    share = len(stale) / len(remote)
+    log.info("prune: %s of %s object(s) are stale (%.0f%%)",
+             format(len(stale), ","), format(len(remote), ","), share * 100)
+    for name in stale[:10]:
+        log.info("    - %s", name)
+    if len(stale) > 10:
+        log.info("    ... and %s more", format(len(stale) - 10, ","))
+
+    if share > MAX_PRUNE_FRACTION:
+        log.error("REFUSING to prune: that is more than %.0f%% of the bucket. "
+                  "Check the build before cleaning up.", MAX_PRUNE_FRACTION * 100)
+        return 0
+    if not apply:
+        log.info("prune: dry run, nothing deleted (pass --prune to apply)")
+        return 0
+
+    removed = 0
+    for i in range(0, len(stale), 200):          # the API takes a batch of paths
+        removed += sb.delete_objects(stale[i:i + 200], bucket=sb.DATA_BUCKET)
+    log.info("prune: deleted %s object(s)", format(removed, ","))
+    return removed
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Publish dashboard data to Supabase")
     ap.add_argument("--plan", action="store_true", help="print the layout and exit")
@@ -248,7 +409,20 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--verify", action="store_true",
                     help="read a sample back anonymously and exit")
+    ap.add_argument("--prune", action="store_true",
+                    help="after uploading, delete bucket objects this build no "
+                         "longer produces (e.g. nav files for funds removed from "
+                         "the catalogue). Without it they are only listed.")
+    ap.add_argument("--to-dir", metavar="DIR",
+                    help="write the same asset-class tree to DIR instead of "
+                         "uploading. The dashboard reads that layout, not the "
+                         "flat files the engine emits, so this is what makes a "
+                         "local `npm run dev` show a freshly built dataset "
+                         "without publishing anything.")
     args = ap.parse_args()
+
+    if args.to_dir:
+        return write_local_tree(args.to_dir, args.only)
 
     from scripts import supabase_store as sb
 
@@ -286,6 +460,13 @@ def main() -> int:
     log.info("-" * 62)
     log.info("uploaded %s of %s in %.0fs", format(ok, ","), format(len(items), ","),
              time.time() - t0)
+    if not failed:
+        # Only prune after a clean upload: pruning against a partial plan would
+        # delete files that simply had not been re-uploaded yet.
+        keep = {dest for _, dest in items} | {"manifest.json"}
+        prune_remote(sb, keep, apply=args.prune)
+    else:
+        log.warning("skipping the prune because %d upload(s) failed", len(failed))
     if failed:
         log.error("%d failed, e.g. %s", len(failed), ", ".join(failed[:5]))
         return 1

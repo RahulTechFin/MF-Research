@@ -15,7 +15,33 @@ const VIEWS: { key: ViewType; label: string }[] = [
 
 const ASSET_CLASSES: AssetClass[] = ['Equity', 'Hybrid', 'Debt', 'Other']
 
-const MOVER_PERIODS = ['1M', '3M', '6M', '12M']
+// Trailing periods offered by Leaders & Laggards. 3Y and 5Y are annualised in the
+// engine, so a fund's number here is a CAGR rather than a cumulative return —
+// which is what makes them comparable with the shorter periods beside them.
+const MOVER_PERIODS = ['1M', '3M', '6M', '12M', '3Y', '5Y']
+
+/**
+ * How return cells are coloured.
+ *
+ * 'none' keeps the plain heat map: each cell shaded by its own magnitude.
+ * 'benchmark' and 'category' re-base the colour on a comparison instead, so a
+ * 9% return reads green or red depending on what it was up against rather than
+ * on how large it is.
+ */
+type CompareMode = 'none' | 'benchmark' | 'category'
+
+// The heat map is the resting state, not a choice: there is no button for it.
+// Ticking a comparison replaces it; clicking the active comparison again turns it
+// off and the heat map returns.
+const COMPARE_MODES: { key: Exclude<CompareMode, 'none'>; label: string; hint: string }[] = [
+  { key: 'benchmark', label: 'vs Benchmark',
+    hint: 'Green above the benchmark for that period, red below. Click again for the heat map.' },
+  { key: 'category',  label: 'vs Category Avg',
+    hint: 'Arrow up or down against the category average. Click again for the heat map.' },
+]
+
+/** Ties in floating point are meaningless here; treat a hair's breadth as equal. */
+const COMPARE_EPSILON = 1e-9
 
 function formatPeriodHeader(pk: string): string {
   // YYYY-MM
@@ -27,12 +53,107 @@ function formatPeriodHeader(pk: string): string {
       return `${months[monthIdx]} ${y}`
     }
   }
-  // YYYY-Q#
-  if (/^\d{4}-Q[1-4]$/.test(pk)) {
-    const [y, q] = pk.split('-')
-    return `${q} ${y}`
-  }
+  // Q#-YYYY, which is what build_json emits ("Q3-2024"). This used to test for
+  // YYYY-Q# and so never matched, leaving the raw key on screen.
+  const q = /^Q([1-4])-(\d{4})$/.exec(pk)
+  if (q) return `Q${q[1]} ${q[2]}`
   return pk
+}
+
+/**
+ * Chronological rank of a period column, newest highest.
+ *
+ * Sorting these keys as plain strings was wrong for quarters and only quarters.
+ * "Q3-2024" puts the quarter BEFORE the year, so a descending string sort
+ * compares the quarter digit first and interleaves the years:
+ *
+ *     QTD, Q4-2025, Q4-2024, Q3-2025, Q3-2024, Q2-2026, Q2-2025, Q1-2026, Q1-2025
+ *
+ * For a fund launched partway through, that reads as data, data, blank, data,
+ * blank — which looks exactly like the engine failing to compute some quarters,
+ * when in fact the columns were out of order. Monthly ("2025-08") and annual
+ * ("2024") keys lead with the year, so they were never affected.
+ */
+function periodRank(pk: string): number {
+  if (pk === 'MTD' || pk === 'QTD' || pk.startsWith('YTD')) return Number.MAX_SAFE_INTEGER
+  const m = /^(\d{4})-(\d{2})$/.exec(pk)
+  if (m) return Number(m[1]) * 100 + Number(m[2])
+  const q = /^Q([1-4])-(\d{4})$/.exec(pk)
+  if (q) return Number(q[2]) * 100 + Number(q[1]) * 3
+  const y = /^(\d{4})$/.exec(pk)
+  if (y) return Number(y[1]) * 100
+  return -1
+}
+
+/**
+ * One return cell, shaded by whichever comparison is selected.
+ *
+ * The three modes deliberately look different rather than all being red/green
+ * fills: colour alone already carries the sign of the return in 'none' mode, so
+ * re-using the same signal for "beat the benchmark" would be ambiguous. Benchmark
+ * mode tints the cell and keeps a left edge; category mode leaves the cell alone
+ * and adds an arrow, which also survives being read without colour.
+ *
+ * A missing comparison value (no benchmark for the category, no average for the
+ * period) falls back to the plain heat map instead of inventing a verdict.
+ */
+function ReturnCell({ value, mode, benchmark, categoryAvg }: {
+  value: number | null | undefined
+  mode: CompareMode
+  benchmark: number | null | undefined
+  categoryAvg: number | null
+}) {
+  // The table's own type allows undefined for an absent period; the formatters
+  // take null, so collapse the two here rather than at every call site.
+  const v: number | null = value ?? null
+  const ref: number | null =
+    (mode === 'benchmark' ? benchmark : categoryAvg) ?? null
+
+  if (v == null || mode === 'none' || ref == null) {
+    return <td className={`ret-cell ${heatmapClass(v)} ${retColor(v)}`}>{fmtPct(v)}</td>
+  }
+
+  const diff = v - ref
+  const flat = Math.abs(diff) < COMPARE_EPSILON
+  const up = diff > 0
+  const bps = `${diff >= 0 ? '+' : ''}${(diff * 100).toFixed(1)}%`
+
+  if (mode === 'benchmark') {
+    const tint = flat ? undefined
+      : up ? 'rgba(52,211,153,0.14)' : 'rgba(248,113,113,0.14)'
+    const edge = flat ? 'transparent' : up ? 'var(--gain)' : 'var(--loss)'
+    return (
+      <td className="ret-cell tabnum"
+          title={`${fmtPct(v)} vs benchmark ${fmtPct(ref)} (${bps})`}
+          style={{ background: tint, boxShadow: `inset -3px 0 0 ${edge}`,
+                   color: flat ? 'var(--text-mid)'
+                              : up ? 'var(--gain)' : 'var(--loss)',
+                   fontWeight: flat ? undefined : 600 }}>
+        {fmtPct(v)}
+      </td>
+    )
+  }
+
+  return (
+    <td className="ret-cell tabnum"
+        title={`${fmtPct(v)} vs category average ${fmtPct(ref)} (${bps})`}>
+      <span style={{ color: retColorValue(v) }}>{fmtPct(v)}</span>
+      {!flat && (
+        <span aria-hidden style={{ marginLeft: 4, fontSize: 10, fontWeight: 700,
+                                   color: up ? 'var(--gain)' : 'var(--loss)' }}>
+          {up ? '▲' : '▼'}
+        </span>
+      )}
+    </td>
+  )
+}
+
+/** The colour retColor() would apply, as a value rather than a class. */
+function retColorValue(v: number | null | undefined): string {
+  if (v == null) return 'var(--text-low)'
+  if (v > 0) return 'var(--gain)'
+  if (v < 0) return 'var(--loss)'
+  return 'var(--text-mid)'
 }
 
 interface MoversProps {
@@ -77,11 +198,30 @@ function LeadersLaggards({ filteredFunds, categoryAvg }: MoversProps) {
   return (
     <div className="mt-6">
       <div className="section-header">Leaders &amp; Laggards</div>
-      <div className="flex gap-2 mb-4">
-        {MOVER_PERIODS.map(p => (
-          <button key={p} onClick={() => setPeriod(p)}
-            className={`pill${period === p ? ' active' : ''}`}>{p}</button>
-        ))}
+      <div className="flex gap-2 mb-4 items-center flex-wrap">
+        {MOVER_PERIODS.map(p => {
+          // A period with nothing behind it is offered but disabled rather than
+          // hidden, so the row of choices does not shift as categories change —
+          // and so an empty 5Y reads as "no fund is old enough" instead of
+          // looking like a missing feature.
+          const n = filteredFunds.filter(
+            f => f.returns[p] !== null && f.returns[p] !== undefined).length
+          return (
+            <button key={p} onClick={() => n > 0 && setPeriod(p)}
+              disabled={n === 0}
+              title={n === 0 ? `No fund in this category has a ${p} return yet`
+                             : `${n} fund(s) with a ${p} return`}
+              className={`pill${period === p ? ' active' : ''}`}
+              style={n === 0 ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}>
+              {p}
+            </button>
+          )
+        })}
+        {periodData.length === 0 && (
+          <span className="text-xs" style={{ color: 'var(--text-low)' }}>
+            No fund in this selection has a {period} return.
+          </span>
+        )}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Top 10 winners */}
@@ -155,15 +295,25 @@ function LeadersLaggards({ filteredFunds, categoryAvg }: MoversProps) {
 interface Props {
   selectedFunds: string[]
   onToggleFund: (code: string) => void
+  /** A fund chosen from the Ctrl+S search; the table jumps to it. */
+  focusFund?: { code: string; name: string; slug: string; asset_class: string } | null
+  onFocusHandled?: () => void
 }
 
-export default function FundScreener({ selectedFunds, onToggleFund }: Props) {
+export default function FundScreener({ selectedFunds, onToggleFund,
+                                       focusFund, onFocusHandled }: Props) {
   const { data: meta } = useMeta()
   const [activeAsset, setActiveAsset] = useState<AssetClass>('Equity')
   const [view, setView]               = useState<ViewType>('trailing')
   const [activeSlug, setActiveSlug]   = useState<string>('')
-  const [amcMode, setAmcMode]         = useState(false)
+  // Replaces a "🏢 AMC Mode" toggle that was wired to state but never read
+  // anywhere — it changed nothing when clicked.
+  const [compare, setCompare]         = useState<CompareMode>('none')
   const [selectedSector, setSelectedSector] = useState<string>(ALL_SECTORS)
+  // Name filter, typed here or handed over by the Ctrl+S search.
+  const [nameFilter, setNameFilter] = useState('')
+  // The code to highlight once, right after a search pick.
+  const [highlight, setHighlight] = useState<string | null>(null)
 
   const categories = (meta?.categories ?? []).filter(c => c.asset_class === activeAsset)
 
@@ -177,11 +327,35 @@ export default function FundScreener({ selectedFunds, onToggleFund }: Props) {
     setSelectedSector(ALL_SECTORS)
   }, [slug])
 
+  // Honour a pick from the Ctrl+S search: move to the fund's asset class and
+  // category, narrow the table to its name, and scroll it into view. The parent
+  // is told once so re-renders do not keep re-applying it and fighting the user.
+  useEffect(() => {
+    if (!focusFund) return
+    setActiveAsset(focusFund.asset_class as AssetClass)
+    setActiveSlug(focusFund.slug)
+    setSelectedSector(ALL_SECTORS)
+    setNameFilter(focusFund.name)
+    setHighlight(focusFund.code)
+    onFocusHandled?.()
+    // The row does not exist until the category table has loaded, so the scroll
+    // is attempted after paint and again shortly after.
+    const scroll = () => document
+      .getElementById(`fund-row-${focusFund.code}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    requestAnimationFrame(scroll)
+    const t = setTimeout(scroll, 600)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusFund])
+
   const isSectoral = slug === SECTORAL_THEMATIC_SLUG
   const sectorOpts = isSectoral ? sectorOptions(tableData?.funds ?? []) : []
 
   // Filter sectoral/thematic funds if chosen
+  const nameNeedle = nameFilter.trim().toLowerCase()
   const filteredFunds = tableData?.funds.filter(fund => {
+    if (nameNeedle && !fund.scheme_name.toLowerCase().includes(nameNeedle)) return false
     if (!isSectoral || selectedSector === ALL_SECTORS) return true
     return sectorOf(fund) === selectedSector
   }) ?? []
@@ -198,7 +372,7 @@ export default function FundScreener({ selectedFunds, onToggleFund }: Props) {
   // Sorting columns descending (latest first) for quarterly, annual, and monthly views
   const sortedPeriodKeys = [...(tableData?.period_keys ?? [])]
   if (view !== 'trailing') {
-    sortedPeriodKeys.sort((a, b) => b.localeCompare(a))
+    sortedPeriodKeys.sort((a, b) => periodRank(b) - periodRank(a))
   }
 
   const categoryInfo = meta?.categories.find(c => c.slug === slug)
@@ -263,10 +437,44 @@ export default function FundScreener({ selectedFunds, onToggleFund }: Props) {
             </button>
           ))}
         </div>
-        <button onClick={() => setAmcMode(!amcMode)}
-          className={`amc-toggle${amcMode ? ' active' : ''}`}>
-          {amcMode ? '← Category Mode' : '🏢 AMC Mode'}
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Visible so a filter applied by the Ctrl+S search can be seen and
+              cleared — a narrowed table with no explanation reads as missing data. */}
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded"
+               style={{ background: 'var(--bg-raised)', border: '1px solid var(--line)' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                 stroke="var(--text-low)" strokeWidth="2">
+              <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+            </svg>
+            <input
+              value={nameFilter}
+              onChange={e => { setNameFilter(e.target.value); setHighlight(null) }}
+              placeholder="Filter by name (Ctrl+S to search all)"
+              style={{ background: 'transparent', border: 'none', outline: 'none',
+                       color: 'var(--text-hi)', fontSize: 12, width: 210 }}
+            />
+            {nameFilter && (
+              <button onClick={() => { setNameFilter(''); setHighlight(null) }}
+                      title="Clear the name filter"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer',
+                               color: 'var(--text-low)', fontSize: 14, lineHeight: 1 }}>
+                ×
+              </button>
+            )}
+          </div>
+          <span className="text-[11px] uppercase tracking-wider"
+                style={{ color: 'var(--text-low)' }}
+                title="With neither selected, returns are shaded by their own size (heat map)">
+            Compare
+          </span>
+          {COMPARE_MODES.map(m => (
+            <button key={m.key} title={m.hint}
+              onClick={() => setCompare(compare === m.key ? 'none' : m.key)}
+              className={`amc-toggle${compare === m.key ? ' active' : ''}`}>
+              {m.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Main table */}
@@ -300,7 +508,10 @@ export default function FundScreener({ selectedFunds, onToggleFund }: Props) {
               </thead>
               <tbody key={`${activeSlug}-${view}`} className="rows-enter">
                 {filteredFunds.map(fund => (
-                  <tr key={fund.scheme_code}>
+                  <tr key={fund.scheme_code} id={`fund-row-${fund.scheme_code}`}
+                      style={fund.scheme_code === highlight
+                        ? { boxShadow: 'inset 0 0 0 2px var(--accent-a)' }
+                        : undefined}>
                     {/* Checkbox column */}
                     <td className="text-center" onClick={e => e.stopPropagation()}>
                       <input
@@ -315,14 +526,11 @@ export default function FundScreener({ selectedFunds, onToggleFund }: Props) {
                       <div className="truncate">{fund.scheme_name}</div>
                     </td>
                     <td className="text-xs" style={{ color: 'var(--text-mid)' }}>{fund.amc_name}</td>
-                    {sortedPeriodKeys.map(pk => {
-                      const v = fund.returns[pk]
-                      return (
-                        <td key={pk} className={`ret-cell ${heatmapClass(v)} ${retColor(v)}`}>
-                          {fmtPct(v)}
-                        </td>
-                      )
-                    })}
+                    {sortedPeriodKeys.map(pk => (
+                      <ReturnCell key={pk} value={fund.returns[pk]} mode={compare}
+                                  benchmark={tableData.benchmark[pk]}
+                                  categoryAvg={getCategoryAvgForPeriod(pk)} />
+                    ))}
                   </tr>
                 ))}
                 {filteredFunds.length === 0 && (

@@ -1,0 +1,226 @@
+"""
+nav_store.py — NAV history read back from Supabase, topped up from AMFI.
+
+    Supabase nav/<code>.json  ──pull──►  add today from AMFI  ──gate──►  DB
+
+WHY
+The daily run used to re-download every fund's ENTIRE history from api.mfapi.in
+on every single run: ~3.5 million rows, ~2,050 HTTP requests, to rebuild files
+that already existed and had not changed below their last day. The history was
+already sitting in Supabase, published by yesterday's run.
+
+This is the same shape as scripts/index_store, which has done it this way for the
+8 Market Pulse indices all along: pull what is published, extend it by the days
+that are missing, gate the result, keep it.
+
+    index_store   Supabase <slug>.json  + Yahoo v8   -> gate -> push
+    nav_store     Supabase nav/<code>.json + AMFI     -> gate -> DB
+
+WHAT SUPPLIES WHAT
+    Supabase   every NAV up to and including the last published day. Authority
+               for history.
+    AMFI       the newest day only. NAVAll.txt is a snapshot -- one row per fund,
+               today -- and there is no history endpoint, so it can never do more
+               than extend the series by its own date.
+    mfapi      BOOTSTRAP ONLY, and only for a fund with no published file at all
+               (a newly launched scheme, or a first run against an empty bucket).
+               Nothing else reads it. Pass allow_bootstrap=False to forbid even
+               that, at the cost of a new fund starting from one day.
+
+WHY A GATE
+Overwriting a good history with a short one is the failure that matters, and it
+is silent -- returns simply start reading None. So a fund's series is only
+accepted if it still has at least MIN_POINTS_FLOOR points, has not shrunk past
+MAX_SHRINK of what was published, and its newest date has not gone backwards.
+A fund that fails is kept at its PUBLISHED series rather than the new one.
+"""
+from __future__ import annotations
+
+import concurrent.futures as cf
+import json
+import logging
+import threading
+from datetime import datetime
+
+log = logging.getLogger("nav_store")
+
+# A series is a plain {iso_date: nav}; dicts merge by date, which is the whole
+# point -- the same day arriving twice cannot duplicate a row.
+Series = dict[str, float]
+
+# Gates, mirroring index_store.validate_one.
+#
+# The floor is 1, not some comfortable minimum: a fund launched this week
+# legitimately has a single NAV. Setting it to 2 rejected the three JioBlackRock
+# funds on their first days, which was pure noise -- there was nothing to protect,
+# because the published series was that same single point. Only an EMPTY series is
+# invalid. The shrink and date-regression checks below do the real work.
+MIN_POINTS_FLOOR = 1
+MAX_SHRINK = 0.90         # may not fall below 90% of what is already published
+
+# Parallel downloads. Supabase serves these from object storage and the limit is
+# the round trip, not our CPU; 16 keeps ~2,000 files under a minute without
+# tripping rate limits.
+WORKERS = 16
+
+
+def nav_remote_path(code: str, folder: str) -> str:
+    """Where a fund's series lives, e.g. "equity/large-cap/nav/103174.json"."""
+    return f"{folder}/nav/{code}.json"
+
+
+def folders_for(schemes: list[dict]) -> tuple[dict[str, str], list[str]]:
+    """
+    {scheme_code: "<asset-class>/<slug>"} plus the codes that could not be placed.
+
+    Derived from the CATALOGUE and CATEGORY_SEED, not from a previous build's
+    output. publish_data.load_maps reads the flat category_<slug>_trailing.json
+    files to get the same mapping, which is fine when it runs (after a build) but
+    useless here: this runs BEFORE the build, and those files no longer sit in
+    site/public/data at all now that the published tree lives there. Using the
+    seed means the mapping exists on a machine that has never built anything.
+    """
+    from scripts.init_db import ASSET_FOLDER, CATEGORY_SEED
+
+    by_name = {name: (ASSET_FOLDER.get(ac, "other"), slug)
+               for ac, name, slug, _order in CATEGORY_SEED}
+
+    folders: dict[str, str] = {}
+    unplaced: list[str] = []
+    for s in schemes:
+        code = str(s["scheme_code"])
+        hit = by_name.get(s.get("category_name") or "")
+        if hit:
+            folders[code] = f"{hit[0]}/{hit[1]}"
+        else:
+            unplaced.append(code)
+    return folders, unplaced
+
+
+def parse_published(raw: bytes) -> Series:
+    """
+    {date: nav} from a published nav file, or {} if it is unusable.
+
+    Unreadable is treated as absent rather than fatal: the fund falls through to
+    bootstrap and the run continues.
+    """
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return {}
+    out: Series = {}
+    for row in payload.get("series") or []:
+        try:
+            d, v = row[0], float(row[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if v > 0:
+            out[d] = v
+    return out
+
+
+def pull_many(codes_folders: dict[str, str], workers: int = WORKERS,
+              on_progress=None) -> dict[str, Series]:
+    """
+    Published series for many funds. Absent or unreadable files are simply
+    missing from the result, which is what marks a fund as needing a bootstrap.
+    """
+    from scripts import supabase_store as sb
+
+    if not sb.enabled():
+        log.warning("Supabase not configured (%s) — no published history to read",
+                    sb.why_disabled())
+        return {}
+
+    out: dict[str, Series] = {}
+    lock = threading.Lock()
+    done = 0
+
+    def one(item):
+        nonlocal done
+        code, folder = item
+        raw = sb.download_bytes(nav_remote_path(code, folder),
+                                bucket=sb.DATA_BUCKET)
+        series = parse_published(raw) if raw else {}
+        with lock:
+            done += 1
+            if series:
+                out[code] = series
+            if on_progress and done % 250 == 0:
+                on_progress(done, len(codes_folders), len(out))
+        return None
+
+    with cf.ThreadPoolExecutor(workers) as ex:
+        list(ex.map(one, codes_folders.items()))
+
+    log.info("Supabase: read history for %s of %s fund(s)",
+             f"{len(out):,}", f"{len(codes_folders):,}")
+    return out
+
+
+def validate(new: Series, published: Series) -> list[str]:
+    """Reasons not to trust `new`. Empty list means it is safe to use."""
+    problems = []
+    if len(new) < MIN_POINTS_FLOOR:
+        problems.append(f"only {len(new)} point(s)")
+    if published:
+        if len(new) < len(published) * MAX_SHRINK:
+            problems.append(f"shrank to {len(new)} from {len(published)} "
+                            f"({len(new) / len(published):.0%})")
+        if new and max(new) < max(published):
+            problems.append(f"newest date went backwards: "
+                            f"{max(published)} -> {max(new)}")
+    return problems
+
+
+def merge_amfi(series_by_code: dict[str, Series],
+               amfi: dict[str, tuple[str, float]],
+               cap: str | None = None) -> dict:
+    """
+    Extend each fund's series with AMFI's latest row.
+
+    AMFI is only ever allowed to ADD a date. A row for a day the fund already has
+    is ignored rather than overwritten: the published value came from the same
+    source a day earlier and rewriting history is exactly what this design is
+    meant to avoid. `cap` (an ISO date) drops anything newer, so the previous-day
+    rule stays in one place.
+    """
+    stats = {"extended": 0, "already_current": 0, "absent_from_amfi": 0,
+             "capped": 0}
+    for code, series in series_by_code.items():
+        row = amfi.get(str(code))
+        if row is None:
+            stats["absent_from_amfi"] += 1
+            continue
+        d, nav = row
+        if cap and d > cap:
+            stats["capped"] += 1
+            continue
+        if d in series:
+            stats["already_current"] += 1
+            continue
+        if series and d < max(series):
+            # Older than what we hold: a wound-up fund AMFI still lists at the
+            # price it died at. Nothing to add.
+            stats["already_current"] += 1
+            continue
+        series[d] = nav
+        stats["extended"] += 1
+    return stats
+
+
+def previous_day_cap(now: datetime | None = None) -> str:
+    """
+    Same rule as build_db_from_api.previous_business_close, imported from there
+    so there is one definition.
+    """
+    from scripts.build_db_from_api import previous_business_close
+    return previous_business_close(now)
+
+
+def summarise(series_by_code: dict[str, Series]) -> dict:
+    total = sum(len(s) for s in series_by_code.values())
+    newest = max((max(s) for s in series_by_code.values() if s), default=None)
+    oldest = min((min(s) for s in series_by_code.values() if s), default=None)
+    return {"funds": len(series_by_code), "rows": total,
+            "newest": newest, "oldest": oldest}

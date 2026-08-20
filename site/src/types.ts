@@ -63,6 +63,18 @@ export interface GlanceRow {
   fund_count: number
   averages: Record<string, number | null>
   benchmark: Record<string, number | null>
+  /**
+   * Per-theme averages, present only on Sectoral/Thematic.
+   *
+   * AMFI files every theme under that one category, so its single row of
+   * averages blends banking with pharma and technology and describes no fund
+   * anyone can buy. Category Snapshot expands this into one line per theme.
+   */
+  sectors?: {
+    sector: string
+    fund_count: number
+    averages: Record<string, number | null>
+  }[]
 }
 
 export interface GlanceData {
@@ -110,18 +122,24 @@ export interface QuartileFundRow {
   sector?: string
 }
 
-export interface ConsistencyEntry {
+/**
+ * One fund's quartile journey. Every list in QuartilesData uses this same shape,
+ * because consistency and volatility are now read off the same history — that is
+ * what stops a fund appearing in both. See engine.quartile_journeys.
+ */
+export interface JourneyEntry {
   scheme_code: string
+  history: (number | null)[]
+  periods: number
   avg_quartile: number
   pct_q1: number
-  history: (number | null)[]
-}
-
-export interface VolatilityEntry {
-  scheme_code: string
-  sigma: number
-  best: number
-  worst: number
+  /** Share of periods spent in Q1/Q2 and in Q3/Q4. */
+  top_share: number
+  bottom_share: number
+  /** Moves between the top half and the bottom half, in either direction. */
+  crossings: number
+  /** How evenly the time splits between halves: 0 never left one, 0.5 a dead heat. */
+  balance: number
 }
 
 export interface QuartilesData {
@@ -130,8 +148,13 @@ export interface QuartilesData {
   mode: 'quarterly' | 'annual'
   period_labels: string[]
   funds: QuartileFundRow[]
-  most_consistent: ConsistencyEntry[]
-  most_volatile: VolatilityEntry[]
+  /** Never crossed out of Q1/Q2. Disjoint from most_volatile. */
+  most_consistent: JourneyEntry[]
+  /** Crossed between the halves at least once. Disjoint from most_consistent. */
+  most_volatile: JourneyEntry[]
+  /** Level rather than stability, so these MAY overlap the two lists above. */
+  best_performers?: JourneyEntry[]
+  worst_performers?: JourneyEntry[]
 }
 
 export interface RiskFundRow {

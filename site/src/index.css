@@ -344,12 +344,85 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ── Sticky table column ─────────────────────────────────────────────────── */
+/* Sticky first column.
+   This used to say `background: inherit`, which reads as "take the row's colour"
+   but resolves to the <tr> -- and rows are transparent, so the pinned name
+   column let the scrolling columns show straight through it and fund names were
+   unreadable mid-scroll. Every state now paints its own opaque colour.
+   --sticky-bg lets one row override the base (see the benchmark row in
+   CategorySnapshot). The rules below must out-specify
+   `.data-table tr:hover td` and `.data-table .pinned-row td`, both of which set
+   the shorthand `background` and would otherwise wipe it back to translucent. */
 .sticky-col {
   position: sticky;
   left: 0;
-  background: inherit;
+  background-color: var(--sticky-bg, var(--bg-card));
   z-index: 5;
-  box-shadow: 2px 0 8px rgba(0,0,0,0.3);
+  /* A hairline plus a soft falloff, so the column reads as an edge rather than
+     a drop shadow lying on top of the data. */
+  box-shadow: 1px 0 0 var(--line), 6px 0 10px -6px rgba(0, 0, 0, 0.45);
+}
+
+/* Header cells are sticky in both directions and match the header strip. */
+.data-table th.sticky-col {
+  --sticky-bg: var(--bg-raised);
+  z-index: 11;
+}
+
+/* The hover tint is translucent by design, so it is composited over the opaque
+   base rather than replacing it. */
+.data-table tr:hover td.sticky-col {
+  background-color: var(--sticky-bg, var(--bg-card));
+  background-image: linear-gradient(var(--bg-hover), var(--bg-hover));
+}
+
+.data-table .pinned-row td.sticky-col {
+  --sticky-bg: var(--bg-raised);
+}
+
+/* The benchmark sub-row under each category in Category Snapshot.
+   Its tint is deliberately translucent, so the sticky cell paints the opaque
+   card colour first and layers the same tint on top — the alternative,
+   color-mix() with a translucent input, yields a translucent result and the
+   column would still have been see-through. */
+.data-table .benchmark-row td {
+  background: rgba(34, 211, 238, 0.03);
+}
+
+/* Theme breakdown rows under Sectoral/Thematic in Category Snapshot.
+   Indented and faintly tinted so they read as belonging to the row above,
+   with the sticky column painted opaque for the same reason every other
+   sticky cell is. */
+.data-table .sector-row td {
+  background: rgba(148, 163, 184, 0.05);
+}
+
+.data-table .sector-row td.sticky-col {
+  background-color: var(--bg-card);
+  background-image: linear-gradient(rgba(148, 163, 184, 0.05),
+                                    rgba(148, 163, 184, 0.05));
+  box-shadow: 1px 0 0 var(--line), 6px 0 10px -6px rgba(0, 0, 0, 0.45),
+              inset 3px 0 0 var(--accent-a);
+}
+
+.data-table tr.sector-row:hover td.sticky-col {
+  background-color: var(--bg-card);
+  background-image: linear-gradient(var(--bg-hover), var(--bg-hover)),
+                    linear-gradient(rgba(148, 163, 184, 0.05),
+                                    rgba(148, 163, 184, 0.05));
+}
+
+.data-table .benchmark-row td.sticky-col {
+  background-color: var(--bg-card);
+  background-image: linear-gradient(rgba(34, 211, 238, 0.03),
+                                    rgba(34, 211, 238, 0.03));
+}
+
+.data-table tr.benchmark-row:hover td.sticky-col {
+  background-color: var(--bg-card);
+  background-image: linear-gradient(var(--bg-hover), var(--bg-hover)),
+                    linear-gradient(rgba(34, 211, 238, 0.03),
+                                    rgba(34, 211, 238, 0.03));
 }
 
 /* ── Spread chips ────────────────────────────────────────────────────────── */

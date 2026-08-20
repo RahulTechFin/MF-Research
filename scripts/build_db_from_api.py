@@ -267,8 +267,102 @@ def carry_over_indices(conn: sqlite3.Connection, source_db: str):
         conn.execute("DETACH DATABASE src")
 
 
+def load_history_from_supabase(conn, schemes: list[dict], from_date: str | None,
+                               workers: int) -> list[tuple[str, str]]:
+    """
+    Fill nav_history from the published files, extended by AMFI's latest day.
+
+    Returns the same (code, error) failure list shape as api.fetch_many, so the
+    caller's tolerance check is unchanged.
+
+    A fund with no published file is bootstrapped from api.mfapi.in -- that is the
+    only thing still reading it, and only for funds the bucket has never seen
+    (newly launched schemes, or a first run against an empty bucket).
+    """
+    from scripts import nav_store
+
+    folders, unmapped = nav_store.folders_for(schemes)
+    if unmapped:
+        log.warning("%d scheme(s) have no category and so no published folder: %s",
+                    len(unmapped), ", ".join(unmapped[:8]))
+
+    log.info("Reading published NAV history for %s fund(s) from Supabase ...",
+             f"{len(folders):,}")
+
+    def progress(done, total, found):
+        log.info("   %5d/%d read, %d with history", done, total, found)
+
+    series = nav_store.pull_many(folders, workers=workers, on_progress=progress)
+    published = {c: dict(s) for c, s in series.items()}
+
+    # Bootstrap anything the bucket has never held.
+    missing = [str(s["scheme_code"]) for s in schemes
+               if str(s["scheme_code"]) not in series]
+    failures: list[tuple[str, str]] = []
+    if missing:
+        log.info("Bootstrapping %d fund(s) with no published history from "
+                 "api.mfapi.in ...", len(missing))
+        rows_by_code: dict[str, list[tuple[str, float]]] = {}
+
+        def collect(code, meta, rows):
+            rows_by_code[str(code)] = rows
+
+        _ok, boot_failures = api.fetch_many(
+            missing, mode="history", workers=workers, on_result=collect,
+            min_date=from_date)
+        failures.extend(boot_failures)
+        for code, rows in rows_by_code.items():
+            # fetch_many hands over (scheme_code, nav_date, nav) triples, ready
+            # for a bulk INSERT — not (date, nav) pairs.
+            series.setdefault(code, {}).update(
+                {d: v for _sc, d, v in rows if v and v > 0})
+
+    # AMFI extends every series by its own day, and only forward.
+    from scripts.amfi_topup import fetch_navall, parse_navall
+    text = fetch_navall()
+    if text:
+        amfi = parse_navall(text)
+        stats = nav_store.merge_amfi(series, amfi, cap=previous_business_close())
+        log.info("AMFI extended %s series (%s already current, %s not in the "
+                 "file, %s beyond the previous-day cap)",
+                 f"{stats['extended']:,}", f"{stats['already_current']:,}",
+                 f"{stats['absent_from_amfi']:,}", f"{stats['capped']:,}")
+    else:
+        log.warning("AMFI NAVAll.txt unavailable — today's day will be missing")
+
+    # Gate each fund before it reaches the database.
+    rejected = 0
+    for code, new in list(series.items()):
+        problems = nav_store.validate(new, published.get(code, {}))
+        if problems:
+            rejected += 1
+            if rejected <= 10:
+                log.warning("   %s rejected (%s) — keeping the published series",
+                            code, "; ".join(problems))
+            series[code] = published.get(code, {}) or new
+    if rejected:
+        log.warning("%d fund(s) failed the history gate", rejected)
+
+    floor = from_date or "0000-01-01"
+    conn.executemany(
+        "INSERT OR IGNORE INTO nav_history(scheme_code, nav_date, nav) VALUES(?,?,?)",
+        ((code, d, v) for code, s in series.items()
+         for d, v in s.items() if d >= floor),
+    )
+    # The mfapi path commits inside NavWriter.flush(); this path has to do it
+    # itself. Without it the rows sat in an open transaction and the database came
+    # out EMPTY while the log cheerfully reported how many had been loaded.
+    conn.commit()
+    info = nav_store.summarise(series)
+    log.info("Loaded %s NAV rows for %s fund(s) (%s .. %s)",
+             f"{info['rows']:,}", f"{info['funds']:,}",
+             info["oldest"], info["newest"])
+    return failures
+
+
 def build(db_path: str, limit: int | None, workers: int, mode: str,
-          index_source: str | None, from_date: str | None = HISTORY_START):
+          index_source: str | None, from_date: str | None = HISTORY_START,
+          skip_amfi_topup: bool = False, history_source: str = "supabase"):
     catalogue = load_catalogue()
     schemes = catalogue["schemes"]
     if limit:
@@ -309,15 +403,26 @@ def build(db_path: str, limit: int | None, workers: int, mode: str,
             carry_over_indices(conn, index_source)
 
         codes = [s["scheme_code"] for s in schemes]
-        log.info("Fetching %s from api.mfapi.in with %d workers (history from %s) ...",
-                 "full history" if mode == "history" else "latest NAV",
-                 workers, from_date or "inception")
 
-        writer = NavWriter(conn)
-        ok, failures = api.fetch_many(
-            codes, mode=mode, workers=workers, on_result=writer, min_date=from_date
-        )
-        writer.flush()
+        # Only the mfapi path uses a NavWriter; the Supabase path assembles each
+        # whole series first, gates it, and writes its own rows.
+        writer = None
+        if history_source == "supabase":
+            # Read the history back from what we published, and let AMFI add only
+            # the day it actually knows about. api.mfapi.in is touched only to
+            # bootstrap a fund with no published file — see scripts/nav_store.
+            failures = load_history_from_supabase(
+                conn, schemes, from_date=from_date, workers=workers)
+        else:
+            log.info("Fetching %s from api.mfapi.in with %d workers (history from %s) ...",
+                     "full history" if mode == "history" else "latest NAV",
+                     workers, from_date or "inception")
+
+            writer = NavWriter(conn)
+            ok, failures = api.fetch_many(
+                codes, mode=mode, workers=workers, on_result=writer, min_date=from_date
+            )
+            writer.flush()
 
         failure_rate = len(failures) / max(len(codes), 1)
         if failures:
@@ -330,9 +435,30 @@ def build(db_path: str, limit: int | None, workers: int, mode: str,
                 f"({failure_rate:.1%} > {MAX_FAILURE_RATE:.0%} tolerance). "
                 f"Refusing to publish an incomplete dataset."
             )
-        if writer.empty_schemes:
+        if writer is not None and writer.empty_schemes:
             log.warning("%d schemes returned zero usable NAV rows (e.g. %s)",
                         len(writer.empty_schemes), ", ".join(writer.empty_schemes[:8]))
+
+        # api.mfapi.in trails AMFI by one day, and Value Research reads AMFI, so
+        # without this our "as of" is a day behind everything we get compared
+        # against. Matched on scheme code only -- the file's Plan/Option columns
+        # are blank for 6,598 of its 14,283 rows and filtering on them dropped
+        # 1,368 of our funds. See scripts/amfi_topup.py.
+        #
+        # Placed after the mfapi load so mfapi owns the history and this only ever
+        # adds a newer day, and before the cap below so the same previous-day rule
+        # applies to it -- AMFI publishes today's NAVs during the evening, and
+        # they must not reach the dashboard before every fund has reported.
+        if history_source == "supabase":
+            # load_history_from_supabase already merged AMFI into every series
+            # before writing them, so running it again would only re-check rows
+            # that are already there.
+            log.info("AMFI already merged while reading the published history")
+        elif not skip_amfi_topup:
+            from scripts.amfi_topup import top_up
+            top_up(conn)
+        else:
+            log.info("AMFI top-up disabled (--no-amfi-topup)")
 
         # Cap at yesterday (IST). Applied here as one statement rather than
         # threaded through parse_nav_rows/fetch_history/fetch_many, so no fetch
@@ -368,7 +494,11 @@ def build(db_path: str, limit: int | None, workers: int, mode: str,
             """INSERT INTO ingestion_log(run_type, date_from, date_to,
                                          rows_inserted, rows_skipped, status, ts)
                VALUES(?,?,?,?,?,?,?)""",
-            ("api_build", None, None, writer.total, 0,
+            # writer only exists on the mfapi path; count the table on the other.
+            (f"build:{history_source}", None, None,
+             writer.total if writer is not None else
+             conn.execute("SELECT COUNT(*) FROM nav_history").fetchone()[0],
+             0,
              "success" if not failures else "partial",
              datetime.now(timezone.utc).isoformat()),
         )
@@ -412,9 +542,22 @@ def main():
     ap.add_argument("--from-date", default=HISTORY_START,
                     help=f"clip history at this ISO date (default {HISTORY_START}; "
                          f"use 2006-01-01 to take everything the API has)")
+    ap.add_argument("--history-source", choices=["supabase", "mfapi"],
+                    default="supabase",
+                    help="where NAV history comes from. 'supabase' (default) "
+                         "reads back what was published and lets AMFI add only "
+                         "the newest day, touching api.mfapi.in solely to "
+                         "bootstrap funds the bucket has never held. 'mfapi' is "
+                         "the old behaviour: re-download every fund's whole "
+                         "history on every run.")
+    ap.add_argument("--no-amfi-topup", action="store_true",
+                    help="skip the AMFI latest-day top-up (api.mfapi.in only). "
+                         "Use to reproduce a build exactly as it was before the "
+                         "top-up existed, or if AMFI ships bad data.")
     args = ap.parse_args()
 
-    build(args.db, args.limit, args.workers, args.mode, args.index_source, args.from_date)
+    build(args.db, args.limit, args.workers, args.mode, args.index_source,
+          args.from_date, args.no_amfi_topup, args.history_source)
 
 
 if __name__ == "__main__":

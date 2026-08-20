@@ -29,7 +29,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR   = os.path.dirname(SCRIPT_DIR)
 sys.path.insert(0, ROOT_DIR)
 
-from scripts.init_db import CATEGORY_NORM_MAP
+from scripts.init_db import CATEGORY_NORM_MAP, resolve_category
 
 log = logging.getLogger("amfi_catalogue")
 
@@ -46,7 +46,17 @@ SLEEP_BETWEEN_REQS = 2     # seconds (polite scraping)
 MAX_GAP_DAYS       = 5     # consecutive missing trading days triggers repair
 
 EXCLUDE_WORDS_PLAN   = {"direct"}
-EXCLUDE_WORDS_OPTION = {"idcw", "dividend", "payout", "reinvest", "bonus"}
+# "income distribution" is IDCW written out in full -- AMFI uses both, and 653
+# rows carry the long form. Without it an "Income Distribution Cum Capital
+# Withdrawal Option" row reads as neither growth nor income.
+EXCLUDE_WORDS_OPTION = {"idcw", "dividend", "payout", "reinvest", "bonus",
+                        "income distribution"}
+# ICICI Prudential calls its growth option "Cumulative", and for many of its
+# funds there is NO row called Growth at all -- India Opportunities,
+# Manufacturing and Pharma Healthcare (P.H.D) each publish only a Cumulative
+# option and an IDCW option. Requiring the literal word "growth" dropped every
+# one of them from the universe.
+GROWTH_WORDS = {"growth", "cumulative"}
 
 # Scheme types we collect — must appear as substring of the type header line
 INCLUDE_TYPE_KEYWORDS = {
@@ -73,10 +83,20 @@ def fetch_with_retry(url: str, retries=3) -> str | None:
         try:
             r = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
             r.raise_for_status()
-            if not r.text.strip():
+            # AMFI's Content-Type declares ISO-8859-1 while the body is really
+            # UTF-8, and requests honours the declaration. That turned the
+            # apostrophe in "Children's Fund" into "a<80><99>", so the section
+            # header stopped matching its own mapping key and 11 children's funds
+            # lost their category. Decode as UTF-8 and only fall back to the
+            # declared encoding if the bytes genuinely are not UTF-8.
+            try:
+                text = r.content.decode("utf-8")
+            except UnicodeDecodeError:
+                text = r.text
+            if not text.strip():
                 log.warning("Empty response on attempt %d → retry", attempt)
                 continue
-            return r.text
+            return text
         except Exception as exc:
             log.warning("Attempt %d failed: %s", attempt, exc)
     return None
@@ -96,6 +116,7 @@ LEGACY_PLAN_VARIANT = re.compile(
     r"|discontinued"
     r"|unclaimed"
     r"|segregated"
+    r"|discipline\s+advantage"
     r")\b",
     re.I,
 )
@@ -106,22 +127,123 @@ def is_legacy_plan_variant(name: str) -> bool:
     return bool(LEGACY_PLAN_VARIANT.search(name or ""))
 
 
-def is_regular_growth(name: str) -> bool:
-    """Return True if scheme name qualifies as Regular-Growth."""
-    n = name.lower()
+# Option wording, in either the name or AMFI's Option column.
+_OPTION_STATED_RE = re.compile(
+    r"\b(growth|cumulative|idcw|dividend|payout|reinvestment|reinvest|bonus)\b"
+    r"|income distribution", re.I,
+)
+# The plan marker is where a fund's name ends and its share class begins.
+_PLAN_MARKER_RE = re.compile(r"\b(regular|direct)\b", re.I)
+
+
+def _fund_identity(name: str) -> str:
+    """
+    The fund's name, cut at the plan marker.
+
+    Deliberately crude, because it is used to ask "does this fund state an option
+    ANYWHERE?" and cutting early groups more rows together, which makes the
+    answer more conservative rather than less. Trying to strip option words
+    instead left residue -- "Income Distribution Cum Capital Withdrawal" reduced
+    to "cum capital withdrawal", which matched nothing and made an IDCW row look
+    like a fund of its own.
+    """
+    n = (name or "").lower()
+    m = _PLAN_MARKER_RE.search(n)
+    if m:
+        n = n[:m.start()]
+    n = re.sub(r"[^a-z0-9 ]+", " ", n)
+    return re.sub(r"\s+", " ", n).strip()
+
+
+def silent_growth_codes(text: str) -> set[str]:
+    """
+    Codes to accept even though nothing says "growth".
+
+    A few AMCs state the option neither in the name nor in the Option column:
+        150641  Motilal Oswal Gold and Silver Passive Fund of Funds(Regular Plan)
+        154238  Motilal Oswal Multi Factor Passive Fund of Funds - Regular
+    Each publishes exactly two rows, a Regular and a Direct, with no income option
+    anywhere -- so the Regular row IS the growth option, and dropping it loses a
+    real fund.
+
+    Silence only means growth when there is nothing to confuse it with. A code is
+    returned only when:
+      - its own name states no option and its Option column is empty,
+      - it is not the Direct row,
+      - NO row of the same fund states an option either, and
+      - it is the ONLY silent non-Direct row that fund has.
+
+    The third condition keeps SBI's "Income Distribution Cum Capital Withdrawal"
+    rows out: their fund also publishes an explicit Growth row, so a silent
+    sibling there is some other share class, not the growth option.
+
+    The fourth is what stops legacy share classes being admitted wholesale.
+    "SBI BANKING & PSU FUND" publishes SEVEN rows, every one of them with a blank
+    Plan and a blank Option and an identical name -- they are the retired
+    Retail/Institutional classes, told apart only by ISIN. With no signal to
+    choose between them, picking one would be a guess and admitting all seven
+    would put the same fund on screen seven times, so none is taken.
+    """
+    stated: dict[str, bool] = {}
+    silent_per_fund: dict[str, int] = {}
+    rows: list[tuple[str, str, bool, bool]] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if ";" not in line or line.lower().startswith("scheme code"):
+            continue
+        f = [c.strip() for c in line.split(";")]
+        if len(f) < 8 or not f[0].isdigit():
+            continue
+        code, name, plan, option = f[0], f[3], f[4], f[5]
+        ident = _fund_identity(name)
+        if not ident:
+            continue
+        says = bool(_OPTION_STATED_RE.search(name)) or bool(option.strip())
+        stated[ident] = stated.get(ident, False) or says
+        is_direct = "direct" in name.lower() or "direct" in plan.lower()
+        if not says and not is_direct:
+            silent_per_fund[ident] = silent_per_fund.get(ident, 0) + 1
+        rows.append((code, ident, says, is_direct))
+
+    return {code for code, ident, says, is_direct in rows
+            if not says and not is_direct
+            and not stated.get(ident)
+            and silent_per_fund.get(ident) == 1}
+
+
+def is_regular_growth(name: str, plan: str = "", option: str = "") -> bool:
+    """
+    Return True if this row is the Regular plan's growth option.
+
+    `plan` and `option` are AMFI's own columns. They are consulted only where the
+    NAME is silent, because the name is the more reliable of the two for
+    exclusion: AMFI stamps Option="Growth" on rows plainly named "Bonus Option"
+    or "IDCW Plan", and those are separate share classes whatever the column
+    claims. The columns earn their keep the other way round -- naming the option
+    when the fund name does not, as with "Samco Mid Cap Fund - Regular Plan"
+    (Option=Growth) and "BANK OF INDIA Credit Risk Fund - Regular Plan".
+
+    Callers in ETF sections must pass plan="": ETFs are single-plan instruments
+    and AMFI still marks several liquid ETFs "Direct Plan" while their names say
+    nothing of the kind, so trusting the column there drops live funds.
+    """
+    n = (name or "").lower()
 
     # Duplicate share classes never belong, ETF exemption or not.
     if is_legacy_plan_variant(name):
         return False
-    # Exclude Direct plans (unless it is an ETF — checked by caller)
+    # Exclude Direct plans, by name and by column (see the docstring on why the
+    # column is only safe outside ETF sections).
     if any(w in n for w in EXCLUDE_WORDS_PLAN):
         return False
-    
-    # Must NOT contain IDCW / payout / reinvest / bonus
-    option_words = {"idcw", "payout", "reinvest", "bonus"}
-    if any(w in n for w in option_words):
+    if any(w in (plan or "").lower() for w in EXCLUDE_WORDS_PLAN):
         return False
-    
+
+    # Must NOT be an income/bonus share class. The name decides this outright.
+    if any(w in n for w in ("idcw", "payout", "reinvest", "bonus",
+                            "income distribution")):
+        return False
+
     # Normally exclude dividend, except if it is part of "dividend yield" category
     if "dividend" in n:
         if "dividend yield" not in n:
@@ -130,10 +252,13 @@ def is_regular_growth(name: str) -> bool:
         if any(w in n for w in ["payout", "reinvestment", "reinvest"]):
             return False
 
-    # Must contain 'growth'
-    if "growth" not in n:
-        return False
-    return True
+    # Growth stated in the name wins outright.
+    if any(w in n for w in GROWTH_WORDS):
+        return True
+    # Name says nothing about the option: fall back to AMFI's Option column.
+    if any(w in (option or "").lower() for w in GROWTH_WORDS):
+        return True
+    return False
 
 
 def is_etf_type(type_header: str) -> bool:
@@ -149,11 +274,15 @@ def parse_amfi_text(text: str, is_etf_context=False):
     Returns list of dicts: {scheme_code, scheme_name, amc_name, category_name, nav, nav_date, isin}
     """
     records = []
+    # Funds that state their option nowhere; see silent_growth_codes.
+    silent_ok = silent_growth_codes(text)
     current_amc      = None
     current_type     = None      # e.g. 'open ended schemes(equity scheme - large cap fund)'
     current_category_raw = None  # raw text inside parentheses after ' - '
     is_etf           = is_etf_context
+    skip_section     = False     # True inside Close Ended / Interval sections
     header_fields    = None      # column positions for variable-width chunks
+    unnamed          = 0         # rows whose name column could not be found
 
     for raw_line in text.splitlines():
         line = raw_line.strip()
@@ -165,21 +294,36 @@ def parse_amfi_text(text: str, is_etf_context=False):
             header_fields = [f.strip().lower() for f in line.split(";")]
             continue
 
-        # Scheme-type header: no semicolon, matches known type keywords
+        # Scheme-type header: no semicolon, names a scheme type in parentheses.
+        #
+        # EVERY such header must be recognised, including the ones we do not want.
+        # This used to accept only headers starting with "open ended", so
+        # "Close Ended Schemes(Income)" fell through to the AMC branch below and
+        # was stored as an AMC NAME -- while current_category_raw silently kept
+        # its previous value. The last open-ended section in the file is
+        # "Solution Oriented Scheme - Retirement Fund", so all 4,752 close-ended
+        # and interval rows inherited "Retirement Fund". That was harmless only
+        # because Retirement was unmapped and resolved to None; the moment it was
+        # mapped, ~707 fixed-maturity and interval plans would have been filed as
+        # Retirement funds. Skipping the section explicitly is what makes adding
+        # those mappings safe.
         low = line.lower()
-        matched_type = next(
-            (kw for kw in INCLUDE_TYPE_KEYWORDS if low.startswith(kw)), None
+        is_type_header = ("schemes" in low and "(" in line and ")" in line) or next(
+            (True for kw in INCLUDE_TYPE_KEYWORDS if low.startswith(kw)), False
         )
-        if matched_type or (
-            low.startswith("open ended") and ";" not in line
-        ):
+        if is_type_header:
             current_type = low
-            # Extract category raw text: content after ' - ' inside parens
+            # Only open-ended schemes belong on the platform. Closed-ended FMPs
+            # and interval plans are not continuously investable and cannot be
+            # ranked against open-ended peers.
+            skip_section = not low.startswith("open ended")
+            # Keep the WHOLE text inside the parentheses. Taking only the part
+            # after " - " threw away the qualifier that identifies the category:
+            # "Index Funds - Equity Funds" became a bare "Equity Funds", which
+            # matched nothing, leaving 56 index funds uncategorised.
             try:
-                inside = line[line.index("(") + 1: line.rindex(")")]
-                parts  = inside.split(" - ", 1)
-                current_category_raw = parts[1].strip() if len(parts) > 1 else inside.strip()
-            except Exception:
+                current_category_raw = line[line.index("(") + 1: line.rindex(")")].strip()
+            except ValueError:
                 current_category_raw = None
 
             # The Direct-plan exclusion is skipped only for genuine ETFs, which
@@ -194,6 +338,12 @@ def parse_amfi_text(text: str, is_etf_context=False):
             is_etf = bool(current_category_raw) and "etf" in current_category_raw.lower()
             continue
 
+        # Inside a section we do not collect, ignore data rows entirely.
+        if skip_section:
+            if ";" not in line:
+                current_amc = line
+            continue
+
         # AMC line: no semicolon, not a type header, not blank
         if ";" not in line:
             current_amc = line
@@ -202,21 +352,42 @@ def parse_amfi_text(text: str, is_etf_context=False):
         # Data row: has semicolons
         fields = [f.strip() for f in line.split(";")]
 
-        # Map fields by header if available, else positional
+        # Older 6-column files carry no Plan/Option columns; default them so the
+        # Regular-Growth test can be called the same way for both layouts.
+        plan_col = option_col = ""
+
+        # Map fields by header if available, else positional.
+        #
+        # AMFI CALLS THE NAME COLUMN "NAV Name", NOT "Scheme Name".
+        # Both NAVOpen.txt and NAVAll.txt ship this header:
+        #   Scheme Code;ISIN Div Payout/ ISIN Growth;ISIN Div Reinvestment;
+        #   NAV Name;Plan;Option;Net Asset Value;Date
+        # A lookup for "scheme name" therefore matched nothing and returned "",
+        # so is_regular_growth("") was False and every non-ETF row was discarded.
+        # The parse fell from ~2,800 records to 353 (ETFs only, which take a
+        # different filter branch), the caller's "fewer than 2000" guard aborted
+        # the refresh, and the workflow step runs with continue-on-error, so the
+        # catalogue simply stopped being updated without anything going red.
+        #
+        # Each field now has a list of accepted spellings and a positional
+        # fallback, and a name that still comes back empty is fatal rather than
+        # quietly unmatched -- see the check below.
         if header_fields and len(header_fields) >= 5:
-            def fget(col_name, default=""):
-                try:
-                    idx = next(
-                        i for i, h in enumerate(header_fields) if col_name in h
-                    )
-                    return fields[idx] if idx < len(fields) else default
-                except StopIteration:
-                    return default
-            scheme_code = fget("scheme code")
-            isin        = fget("isin div payout") or fget("isin")
-            scheme_name = fget("scheme name")
-            nav_str     = fget("net asset value") or fget("nav")
-            date_str    = fget("date")
+            def fget(names, default="", pos=None):
+                for col_name in names:
+                    for i, h in enumerate(header_fields):
+                        if col_name in h and i < len(fields) and fields[i]:
+                            return fields[i]
+                if pos is not None and pos < len(fields):
+                    return fields[pos]
+                return default
+            scheme_code = fget(("scheme code",), pos=0)
+            isin        = fget(("isin div payout", "isin"), pos=1)
+            scheme_name = fget(("nav name", "scheme name"), pos=3)
+            plan_col    = fget(("plan",))
+            option_col  = fget(("option",))
+            nav_str     = fget(("net asset value", "nav"), pos=len(fields) - 2)
+            date_str    = fget(("date",), pos=len(fields) - 1)
         elif len(fields) >= 6:
             scheme_code, isin, _, scheme_name, nav_str, date_str = fields[:6]
         elif len(fields) == 5:
@@ -226,6 +397,12 @@ def parse_amfi_text(text: str, is_etf_context=False):
 
         # Validate scheme code
         if not scheme_code or not scheme_code.isdigit():
+            continue
+
+        # An unresolvable name is a format change, not a bad row. Counting them
+        # lets the caller abort instead of silently returning a short parse.
+        if not scheme_name:
+            unnamed += 1
             continue
 
         # Filter Regular-Growth
@@ -239,7 +416,11 @@ def parse_amfi_text(text: str, is_etf_context=False):
             if any(w in scheme_name.lower() for w in EXCLUDE_WORDS_OPTION):
                 continue
         else:
-            if not is_regular_growth(scheme_name):
+            # plan_col is only defined on the header-mapped path; older 6-column
+            # files have no Plan/Option columns at all.
+            if not (is_regular_growth(scheme_name, plan=plan_col,
+                                      option=option_col)
+                    or scheme_code in silent_ok):
                 continue
 
         # Validate NAV
@@ -259,14 +440,10 @@ def parse_amfi_text(text: str, is_etf_context=False):
             except ValueError:
                 continue
 
-        # Normalise category
-        cat_name = CATEGORY_NORM_MAP.get(current_category_raw)
-        if cat_name is None and current_category_raw:
-            # Try partial match
-            for key, val in CATEGORY_NORM_MAP.items():
-                if key.lower() in (current_category_raw or "").lower():
-                    cat_name = val
-                    break
+        # Normalise category. resolve_category lives beside CATEGORY_NORM_MAP in
+        # init_db and applies longest-key-first matching, so the most specific
+        # spelling wins rather than whichever key was inserted first.
+        cat_name = resolve_category(current_category_raw)
 
         records.append({
             "scheme_code":   scheme_code,
@@ -277,5 +454,12 @@ def parse_amfi_text(text: str, is_etf_context=False):
             "nav":           nav,
             "nav_date":      nav_date,
         })
+
+    if unnamed:
+        # Loud on purpose: this is the signature of AMFI renaming a column, which
+        # is exactly how the "NAV Name" break went unnoticed.
+        log.error("%d row(s) had no resolvable scheme name -- the AMFI column "
+                  "layout has probably changed. Header seen: %s",
+                  unnamed, header_fields)
 
     return records

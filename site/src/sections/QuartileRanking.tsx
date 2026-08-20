@@ -682,6 +682,23 @@ export default function QuartileRanking() {
       {/* ── Insight Panels — Row 1 ───────────────────────────────── */}
       {data && (
         <>
+          {/* How to read the little quartile boxes in the panels below.
+              The direction is not guessable from the boxes themselves — they
+              carry no dates — and reading them backwards inverts every story
+              they tell, so it is stated once, right above them. Derived from
+              period_labels rather than written out, so it cannot drift if the
+              engine ever reverses the grid. */}
+          {data.period_labels?.length > 1 && (
+            <div className="flex justify-end mb-1.5">
+              <span className="text-[11px]" style={{ color: 'var(--text-low)' }}>
+                Quartile boxes read left → right, oldest to newest
+                <span style={{ color: 'var(--text-mid)' }}>
+                  {' '}({data.period_labels[0]} → {data.period_labels[data.period_labels.length - 1]})
+                </span>
+              </span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
 
             {/* Most Consistent */}
@@ -689,12 +706,12 @@ export default function QuartileRanking() {
               <InsightHeader
                 icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>}
                 title="Most Consistent Performers"
-                subtitle="Lowest average quartile rank — steady, reliable outperformance"
+                subtitle={`Mostly Q1/Q2 across ${minPeriods}+ ${periodWord}s, and not among the biggest swingers`}
                 count={data.most_consistent.length}
                 accentColor="#34D399"
                 onHelpClick={() => setActiveHelp({
                   title: "🏆 Most Consistent Performers",
-                  meaning: "Funds that regularly maintain top-tier rankings (Q1 or Q2) across consecutive periods, rarely slipping into the underperforming quartiles.",
+                  meaning: "Funds that spent most of their periods (at least 60%) in the top half — Q1 or Q2. Most Volatile is settled first, so any fund among the biggest swingers is listed there instead and never in both boxes at once.",
                   helpful: "Best used for selecting core holdings in a long-term portfolio. High consistency implies a robust investing process and a manager capable of navigating various market conditions successfully."
                 })}
               />
@@ -714,7 +731,12 @@ export default function QuartileRanking() {
                             </div>
                             <div className="flex items-center gap-3 mt-1">
                               <span className="text-xs" style={{ color: 'var(--text-low)' }}>
-                                Avg Q: <strong style={{ color: '#34D399' }}>{entry.avg_quartile.toFixed(2)}</strong>
+                                In Q1/Q2: <strong style={{ color: '#34D399' }}>
+                                  {Math.round(entry.top_share * 100)}%
+                                </strong>
+                              </span>
+                              <span className="text-xs" style={{ color: 'var(--text-low)' }}>
+                                Avg Q: <strong style={{ color: 'var(--text-mid)' }}>{entry.avg_quartile.toFixed(2)}</strong>
                               </span>
                               <span className="text-xs" style={{ color: 'var(--text-low)' }}>
                                 Q1 Rate: <strong style={{ color: q1Pct >= 50 ? '#34D399' : 'var(--text-mid)' }}>{q1Pct}%</strong>
@@ -738,13 +760,13 @@ export default function QuartileRanking() {
               <InsightHeader
                 icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>}
                 title="Most Volatile Performers"
-                subtitle={`Highest return standard deviation — extreme swings between ${periodWord}s`}
+                subtitle={`Swung between Q1/Q2 and Q3/Q4 — the most rank crossings`}
                 count={data.most_volatile.length}
                 accentColor="#FB923C"
                 onHelpClick={() => setActiveHelp({
                   title: "⚡ Most Volatile Performers",
-                  meaning: `Funds with the highest volatility (standard deviation of returns), showing frequent rank swings between ${periodWord}s.`,
-                  helpful: "Useful for identifying high-beta, aggressive strategies. While these funds can yield massive returns during market upswings, their extreme swings require caution and tactical monitoring."
+                  meaning: `Funds that crossed between the top half (Q1/Q2) and the bottom half (Q3/Q4) from one ${periodWord} to the next — counted in either direction. Ranked by how often they cross, then by how evenly they split their time between the halves.`,
+                  helpful: "Useful for identifying high-beta, aggressive strategies. A fund that qualifies as both consistent and volatile is listed here, because the swing is the more important fact about it."
                 })}
               />
               <div className="p-4">
@@ -752,30 +774,107 @@ export default function QuartileRanking() {
                   <div className="text-xs py-6 text-center" style={{ color: 'var(--text-low)' }}>Need minimum {minPeriods} completed {periodWord}s.</div>
                 ) : (
                   <div className="space-y-4">
-                    {data.most_volatile.map((entry, i) => {
-                      const history = fundHistoryMap.get(entry.scheme_code) ?? []
-                      return (
-                        <div key={entry.scheme_code} className="flex items-start gap-3">
-                          <RankBadge rank={i + 1} />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-semibold truncate" style={{ color: 'var(--text-hi)' }}>
-                              {getName(entry.scheme_code)}
-                            </div>
-                            <div className="flex items-center gap-3 mt-1">
-                              <span className="text-xs" style={{ color: 'var(--text-low)' }}>
-                                Volatility (σ): <strong style={{ color: '#FB923C' }}>{fmtPct(entry.sigma)}</strong>
-                              </span>
-                            </div>
-                            <QuartileBar history={history} />
+                    {data.most_volatile.map((entry, i) => (
+                      <div key={entry.scheme_code} className="flex items-start gap-3">
+                        <RankBadge rank={i + 1} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-semibold truncate" style={{ color: 'var(--text-hi)' }}>
+                            {getName(entry.scheme_code)}
                           </div>
+                          <div className="flex items-center gap-3 mt-1 flex-wrap">
+                            <span className="text-xs" style={{ color: 'var(--text-low)' }}>
+                              Crossings: <strong style={{ color: '#FB923C' }}>{entry.crossings}</strong>
+                              <span style={{ opacity: 0.7 }}> / {entry.periods - 1}</span>
+                            </span>
+                            <span className="text-xs" style={{ color: 'var(--text-low)' }}>
+                              Top half: <strong style={{ color: 'var(--text-mid)' }}>
+                                {Math.round(entry.top_share * 100)}%
+                              </strong>
+                            </span>
+                          </div>
+                          <QuartileBar history={entry.history} />
                         </div>
-                      )
-                    })}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             </div>
           </div>
+
+          {/* ── Best / Worst by where the fund actually sat ─────────── */}
+          {/*
+            A deliberately short answer to "who is good and who is bad here".
+            Unlike the pair above, these are share-based -- "most of the time in
+            Q1/Q2" rather than "never left" -- so a fund can be both the best
+            performer and a volatile one. That is the point: this pair measures
+            level, the pair above measures stability.
+          */}
+          {(data.best_performers?.length || data.worst_performers?.length) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+              {([
+                { key: 'best' as const, rows: data.best_performers ?? [],
+                  title: 'Best — mostly Q1 / Q2', colour: '#34D399',
+                  border: 'rgba(52,211,153,0.25)', shareKey: 'top_share' as const,
+                  label: 'In Q1/Q2' },
+                { key: 'worst' as const, rows: data.worst_performers ?? [],
+                  title: 'Worst — mostly Q3 / Q4', colour: '#F87171',
+                  border: 'rgba(248,113,113,0.25)', shareKey: 'bottom_share' as const,
+                  label: 'In Q3/Q4' },
+              ]).map(panel => (
+                <div key={panel.key} className="rounded-2xl overflow-hidden"
+                     style={{ border: `1px solid ${panel.border}`, background: 'var(--bg-card)' }}>
+                  <div className="px-4 py-2.5 flex items-center justify-between"
+                       style={{ background: 'var(--bg-raised)',
+                                borderBottom: '1px solid var(--line)' }}>
+                    <span className="text-sm font-semibold" style={{ color: panel.colour }}>
+                      {panel.title}
+                    </span>
+                    <span className="text-[11px]" style={{ color: 'var(--text-low)' }}>
+                      top {panel.rows.length}
+                    </span>
+                  </div>
+                  {panel.rows.length === 0 ? (
+                    <div className="text-xs py-6 text-center" style={{ color: 'var(--text-low)' }}>
+                      Need minimum {minPeriods} completed {periodWord}s.
+                    </div>
+                  ) : (
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: 34 }}>#</th>
+                          <th className="text-left">Fund</th>
+                          <th className="ret-cell">{panel.label}</th>
+                          <th className="ret-cell">Avg Q</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {panel.rows.map((entry, i) => (
+                          <tr key={entry.scheme_code}>
+                            <td className="text-xs" style={{ color: 'var(--text-low)' }}>{i + 1}</td>
+                            <td className="text-xs font-medium">
+                              <div className="truncate" style={{ maxWidth: 240 }}
+                                   title={fundNameMap.get(entry.scheme_code) ?? entry.scheme_code}>
+                                {getName(entry.scheme_code)}
+                              </div>
+                              <QuartileBar history={entry.history} />
+                            </td>
+                            <td className="ret-cell tabnum font-semibold"
+                                style={{ color: panel.colour }}>
+                              {Math.round(entry[panel.shareKey] * 100)}%
+                            </td>
+                            <td className="ret-cell tabnum" style={{ color: 'var(--text-mid)' }}>
+                              {entry.avg_quartile.toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* ── Insight Panels — Row 2 ─────────────────────────────── */}
           {insights && (
@@ -1072,8 +1171,9 @@ export default function QuartileRanking() {
             <div>
               <h4 className="font-bold text-base mb-1" style={{ color: 'var(--text-hi)' }}>🏆 Consistency & Volatility</h4>
               <ul className="list-disc pl-5 mt-2 space-y-2">
-                <li><strong>Most Consistent Performers:</strong> Funds that maintain the lowest average quartile ranks across all periods. Consistent Q1/Q2 hit rates suggest reliable management.</li>
-                <li><strong>Most Volatile Performers:</strong> Funds with high risk and swing between extremes. These show the quartile boxes to track historical rankings.</li>
+                <li><strong>Most Consistent Performers:</strong> Funds that spent at least 60% of their periods in Q1/Q2 and are not among the biggest swingers.</li>
+                <li><strong>Most Volatile Performers:</strong> Funds that crossed most often between Q1/Q2 and Q3/Q4. Settled first, so a fund qualifying for both appears only here.</li>
+                <li><strong>Best / Worst:</strong> Share of periods in the top or bottom half. This measures level rather than stability, so it may overlap the two lists above.</li>
               </ul>
             </div>
 

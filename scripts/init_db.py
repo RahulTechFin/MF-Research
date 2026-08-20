@@ -3,8 +3,9 @@ init_db.py — Create the SQLite database schema and seed reference data.
 Run once before any backfill. Safe to re-run (CREATE IF NOT EXISTS).
 """
 
-import sqlite3
 import os
+import re
+import sqlite3
 import sys
 
 _DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "mf_research.db")
@@ -127,6 +128,12 @@ def create_schema(conn):
 
 # ── Seed data ─────────────────────────────────────────────────────────────────
 
+# Asset class -> the folder it is published under. Lives here, beside the asset
+# classes themselves, because more than one script needs it: publish_data to
+# place a file and nav_store to find one again before any build has run.
+ASSET_FOLDER = {"Equity": "equity", "Hybrid": "hybrid",
+                "Debt": "debt", "Other": "other"}
+
 CATEGORY_SEED = [
     # (asset_class, category_name, slug, display_order)
     # Equity
@@ -148,6 +155,9 @@ CATEGORY_SEED = [
     ("Hybrid", "Equity Savings",       "equity-savings",       23),
     ("Hybrid", "Multi Asset Allocation","multi-asset",         24),
     ("Hybrid", "Arbitrage",            "arbitrage",            25),
+    # SEBI's seventh hybrid category. Small (3 Regular-Growth funds) but real,
+    # and previously unmapped, so those funds carried no category at all.
+    ("Hybrid", "Balanced Hybrid",      "balanced-hybrid",      26),
     # Debt
     ("Debt", "Overnight Fund",          "overnight",        30),
     ("Debt", "Liquid Fund",             "liquid",           31),
@@ -170,6 +180,17 @@ CATEGORY_SEED = [
     ("Other", "ETF",            "etf",          51),
     ("Other", "Gold ETF",       "gold-etf",     52),
     ("Other", "FoF Overseas",   "fof-overseas", 53),
+    # SEBI files Retirement and Children's funds as their own group, "Solution
+    # Oriented". The dashboard has four asset classes and the site types them as
+    # a closed union, so they sit under Other rather than becoming a fifth class.
+    # What matters for the maths is that each gets its OWN peer group: a
+    # retirement fund is now ranked against retirement funds, which is why they
+    # are separate categories here instead of being folded into Equity.
+    ("Other", "Retirement",     "retirement",   54),
+    ("Other", "Children's",     "childrens",    55),
+    # 298 Regular-Growth domestic fund-of-funds had no category. FoF Overseas
+    # already existed; its domestic counterpart simply had never been mapped.
+    ("Other", "FoF Domestic",   "fof-domestic", 56),
 ]
 
 # AMFI category name → normalised category_name mapping
@@ -205,6 +226,15 @@ CATEGORY_NORM_MAP = {
     "Multi Asset Allocation":           "Multi Asset Allocation",
     "Multi Asset Allocation Fund":      "Multi Asset Allocation",
     "Arbitrage Fund":                   "Arbitrage",
+    "Balanced Hybrid Fund":             "Balanced Hybrid",
+    # Solution Oriented. AMFI writes Children's with a CURLY apostrophe (U+2019);
+    # the straight-quote spelling below never matches the live file but costs
+    # nothing and guards against AMFI normalising it later.
+    "Solution Oriented Scheme - Retirement Fund":  "Retirement",
+    "Retirement Fund":                             "Retirement",
+    "Solution Oriented Scheme - Children’s Fund": "Children's",
+    "Children’s Fund":                        "Children's",
+    "Children's Fund":                             "Children's",
     # Debt
     "Overnight Fund":                   "Overnight Fund",
     "Liquid Fund":                      "Liquid Fund",
@@ -229,10 +259,34 @@ CATEGORY_NORM_MAP = {
     "Gilt Fund":                        "Gilt",
     "Gilt":                             "Gilt",
     "Gilt Fund with 10 year constant duration": "Gilt 10 Year Constant Duration",
+    # The pre-2018 spelling of the same category. Without it the substring rule
+    # fell through to the shorter "Gilt Fund" and filed these as plain Gilt.
+    "10-year Constant Maturity Gilt Fund": "Gilt 10 Year Constant Duration",
     "Floater Fund":                     "Floater Fund",
+    "Floating Interest Rates Fund":      "Floater Fund",
+    # More pre-2018 debt spellings. Longest-match ordering is what keeps these
+    # apart: "Medium to Long Term Fund" must beat "Long Term Fund", and
+    # "Ultra Short to Short Term Fund" must beat "Short Term Fund".
+    "Dynamic Term Fund":                "Dynamic Bond",
+    "Long Term Fund":                   "Long Duration",
+    "Medium Term Fund":                 "Medium Duration",
+    "Medium to Long Term Fund":         "Medium to Long Duration",
+    # Not Ultra Short, despite the name of the section. Every one of the 57 rows
+    # AMFI files here belongs to a fund called "<AMC> Low Duration Fund" (HSBC,
+    # Invesco India, Mirae Asset, UTI) -- this is a pre-2018 bucket those funds
+    # never got moved out of. The SEBI-era fund name is the better authority, and
+    # it agrees for all five Regular-Growth schemes in the section.
+    "Ultra Short to Short Term Fund":   "Low Duration",
     # Other
     "Index Funds":                      "Index Fund",
     "Index Fund":                       "Index Fund",
+    # AMFI also files index funds under "Index Funds - <asset>". The old parser
+    # kept only the text AFTER " - ", so the key became a bare "Equity Funds" /
+    # "Debt Funds" / "Hybrid Fund" and matched nothing. Matching now runs against
+    # the FULL text inside the parentheses, so these resolve.
+    "Index Funds - Equity Funds":       "Index Fund",
+    "Index Funds - Debt Funds":         "Index Fund",
+    "Index Funds - Hybrid Fund":        "Index Fund",
     "Other ETFs":                       "ETF",
     "ETF":                              "ETF",
     "Gold ETF":                         "Gold ETF",
@@ -242,7 +296,57 @@ CATEGORY_NORM_MAP = {
     "Fund of Funds investing overseas": "FoF Overseas",
     "Fund of Funds (Overseas)":         "FoF Overseas",
     "Fund of Fund - Overseas":          "FoF Overseas",
+    "FoF Domestic":                     "FoF Domestic",
+    "Fund of Funds Scheme (Domestic)":  "FoF Domestic",
+    # DELIBERATELY ABSENT: the bare legacy headers "Income" and "Growth".
+    # AMFI reuses them for Close Ended Schemes(Income) and (Growth) -- 4,617 rows
+    # of fixed-maturity and interval plans. Mapping either one would sweep ~676
+    # closed-end FMPs into an open-ended category. Those sections are skipped by
+    # scheme type instead; see parse_amfi_text.
 }
+
+
+def resolve_category(raw: str | None) -> str | None:
+    """
+    AMFI's scheme-type text -> our category name, or None if we do not carry it.
+
+    `raw` is the WHOLE string inside the parentheses of a scheme-type header,
+    e.g. "Equity Scheme - Large Cap Fund" or "Index Funds - Equity Funds".
+
+    LONGEST KEY WINS. The map holds keys that are substrings of other keys, and
+    with dict-insertion order the shorter one won by accident:
+        "10-year Constant Maturity Gilt Fund" matched "Gilt Fund"       -> Gilt
+        "Medium to Long Term Fund"            matched "Long Term Fund"  -> Long Duration
+        "Ultra Short to Short Term Fund"      matched "Short Term Fund" -> Short Duration
+    Sorting candidates by length makes the most specific spelling win instead,
+    which is the only ordering that is stable as keys are added.
+
+    Whitespace is collapsed first: AMFI ships "Other Scheme - Other  ETFs" with a
+    double space, which no single-spaced key could match.
+    """
+    if not raw:
+        return None
+    txt = re.sub(r"\s+", " ", raw).strip()
+    # Apostrophes are the one character AMFI is inconsistent about: the live file
+    # uses U+2019 in "Children's Fund", and a mis-declared charset can deliver it
+    # mojibaked. Fold every variant onto the straight quote before matching so a
+    # category never hinges on which one arrived.
+    txt = txt.replace("’", "'").replace("‘", "'").replace("â", "'")
+    # Exact hit on the full text, then on the part after " - ", so precise keys
+    # never depend on the substring pass at all.
+    folded = {k.replace("’", "'").replace("‘", "'"): v
+              for k, v in CATEGORY_NORM_MAP.items()}
+    if txt in folded:
+        return folded[txt]
+    if " - " in txt:
+        tail = txt.split(" - ", 1)[1].strip()
+        if tail in folded:
+            return folded[tail]
+    low = txt.lower()
+    for key in sorted(folded, key=len, reverse=True):
+        if key.lower() in low:
+            return folded[key]
+    return None
 
 # Real index benchmarks seed (yahoo_ticker, index_name)
 BENCHMARK_SEED = [

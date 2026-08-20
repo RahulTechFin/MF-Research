@@ -22,6 +22,9 @@ interface Props {
 export default function CategorySnapshot({ selectedCategories, onToggleCategory }: Props) {
   const [view, setView] = useState<ViewType>('trailing')
   const [showBenchmark, setShowBenchmark] = useState(false)
+  // Slug of the category whose theme breakdown is open. One at a time: with 22
+  // themes, two expanded rows push everything else off the screen.
+  const [expanded, setExpanded] = useState<string | null>(null)
   const { data, loading } = useGlance(view)
 
   const grouped = data
@@ -102,9 +105,41 @@ export default function CategorySnapshot({ selectedCategories, onToggleCategory 
                             />
                           </td>
                           <td className="sticky-col font-medium" style={{ paddingLeft: '1.5rem', borderLeft: `3px solid ${assetClassColor(ac)}22` }}>
-                            <span className="hover:text-[var(--accent-a)] transition-colors">
-                              {row.category_name}
-                            </span>
+                            {/* A category with themes underneath gets a disclosure
+                                control. Everything else keeps its plain label, so
+                                the column does not sprout arrows it cannot use. */}
+                            {row.sectors?.length ? (
+                              <button
+                                onClick={() => setExpanded(e =>
+                                  e === row.slug ? null : row.slug)}
+                                aria-expanded={expanded === row.slug}
+                                title={expanded === row.slug
+                                  ? 'Hide the theme breakdown'
+                                  : `Show the ${row.sectors.length} themes inside this category`}
+                                className="flex items-center gap-1.5"
+                                style={{ background: 'none', border: 'none', padding: 0,
+                                         color: 'inherit', font: 'inherit', cursor: 'pointer' }}>
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                                     stroke="currentColor" strokeWidth="3"
+                                     style={{ color: 'var(--accent-a)', flexShrink: 0,
+                                              transform: expanded === row.slug ? 'rotate(90deg)' : 'none',
+                                              transition: 'transform 160ms' }}>
+                                  <polyline points="9 18 15 12 9 6" />
+                                </svg>
+                                <span className="hover:text-[var(--accent-a)] transition-colors">
+                                  {row.category_name}
+                                </span>
+                                <span className="text-[10px] px-1.5 rounded-full"
+                                      style={{ background: 'var(--bg-raised)',
+                                               color: 'var(--text-low)' }}>
+                                  {row.sectors.length} themes
+                                </span>
+                              </button>
+                            ) : (
+                              <span className="hover:text-[var(--accent-a)] transition-colors">
+                                {row.category_name}
+                              </span>
+                            )}
                           </td>
                           <td className="text-center" style={{ color: 'var(--text-mid)', fontSize: '0.75rem' }}>
                             {row.fund_count}
@@ -119,9 +154,51 @@ export default function CategorySnapshot({ selectedCategories, onToggleCategory 
                             )
                           })}
                         </tr>
+                        {/* Theme breakdown.
+                            Each line is that theme's own average over the same
+                            periods, precomputed in build_json — not averaged in
+                            the browser, so it agrees with the quartile screen
+                            which also ranks each theme separately. The chip
+                            compares the theme against its parent category, which
+                            is the comparison the row is actually for. */}
+                        {expanded === row.slug && row.sectors?.map(s => (
+                          <tr key={`sec-${row.slug}-${s.sector}`} className="sector-row">
+                            <td />
+                            <td className="sticky-col" style={{ paddingLeft: '2.75rem' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-hi)' }}>
+                                {s.sector}
+                              </span>
+                              <span className="ml-2 text-[10px]"
+                                    style={{ color: 'var(--text-low)' }}>
+                                {s.fund_count}
+                              </span>
+                            </td>
+                            <td />
+                            {(data?.rows[0]?.periods ?? []).map(p => {
+                              const pk = String(p)
+                              const v = s.averages[pk]
+                              const parent = row.averages[pk]
+                              const spread = v != null && parent != null ? v - parent : null
+                              return (
+                                <td key={pk} className={`ret-cell ${retColor(v)}`}
+                                    title={parent != null && v != null
+                                      ? `${s.sector} ${fmtPct(v)} vs category ${fmtPct(parent)}`
+                                      : undefined}>
+                                  <div style={{ fontSize: '0.75rem' }}>{fmtPct(v)}</div>
+                                  {spread != null && (
+                                    <div className={`spread-chip ${spread >= 0 ? 'pos' : 'neg'}`}
+                                         style={{ display: 'block', fontSize: '0.625rem' }}>
+                                      {spread >= 0 ? '+' : ''}{(spread * 100).toFixed(1)}%
+                                    </div>
+                                  )}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        ))}
                         {/* Benchmark sub-row */}
                         {showBenchmark && row.benchmark_id && (
-                          <tr key={`bm-${row.slug}`} style={{ background: 'rgba(34,211,238,0.03)' }}>
+                          <tr key={`bm-${row.slug}`} className="benchmark-row">
                             <td />
                             <td className="sticky-col pl-8" style={{ color: 'var(--text-mid)', fontSize: '0.75rem', fontStyle: 'italic' }}>
                               ↳ Benchmark

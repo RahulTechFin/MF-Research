@@ -169,6 +169,27 @@ def refresh_from_amfi(existing: dict | None) -> dict:
     }
     before = set(merged)
 
+    # One-time repair of names stored while fetch_with_retry trusted AMFI's
+    # mis-declared ISO-8859-1 charset: UTF-8 bytes were decoded as latin-1, so
+    # "Children's" was saved as "Childrena<80><99>s". Funds still listed by AMFI
+    # get a correct name from today's file anyway; this reaches the wound-up ones
+    # that will never be refreshed again. Round-tripping only sticks when it
+    # produces valid UTF-8, so a name that was always latin-1 is left alone.
+    repaired = 0
+    for entry in merged.values():
+        nm = entry.get("scheme_name") or ""
+        if "â" in nm or "Â" in nm:
+            try:
+                fixed = nm.encode("latin-1").decode("utf-8")
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                continue
+            if fixed != nm:
+                entry["scheme_name"] = fixed
+                repaired += 1
+    if repaired:
+        log.info("Repaired %d mojibaked scheme name(s) from the old charset bug",
+                 repaired)
+
     added, updated = 0, 0
     for r in records:
         code = str(r["scheme_code"])
@@ -200,11 +221,16 @@ def refresh_from_amfi(existing: dict | None) -> dict:
     # and FoF Overseas because AMFI files them under "Other Scheme", which the
     # parser treated wholesale as ETFs and so skipped the Direct exclusion.
     # Genuine ETFs are single-plan and keep their exemption.
+    #
+    # The category test used to be `if s.get("category_name") and ...`, which
+    # exempted every UNCATEGORISED entry -- and 147 Direct-plan FoFs had no
+    # category precisely because their AMFI section was unmapped, so they were
+    # immune to the very cleanup meant to remove them. Genuine ETFs always carry
+    # a category, so requiring one to earn the exemption is the correct test.
     ETF_CATEGORIES = {"ETF", "Gold ETF"}
     bogus = [
         c for c, s in merged.items()
-        if s.get("category_name")
-        and s["category_name"] not in ETF_CATEGORIES
+        if s.get("category_name") not in ETF_CATEGORIES
         and "direct" in (s.get("scheme_name") or "").lower()
     ]
     if bogus:

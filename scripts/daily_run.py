@@ -38,8 +38,21 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s", datef
 log = logging.getLogger("daily_run")
 
 # Guard rails — a run that trips these is treated as a bad build.
-MIN_NAV_ROWS = 4_000_000        # full history should be ~5.5M
-MIN_SCHEMES_WITH_DATA = 2_800   # of ~3,210 catalogued
+# Like the scheme guard below, this is expressed per scheme rather than as a flat
+# total. As an absolute 4,000,000 it encoded a ~2,900-fund universe, so pruning to
+# 2,055 live Regular-Growth funds failed a perfectly good build: 3.56M rows over
+# 2,055 funds is ~1,730 each, which is a fuller history per fund than before.
+# What actually signals a bad fetch is the average history collapsing.
+MIN_ROWS_PER_SCHEME = 1_000     # ~1,730 observed; a truncated fetch drops far below
+MIN_NAV_ROWS_FLOOR = 1_000_000  # a dataset this small is a bug whatever the count
+# The scheme guard is a FRACTION of what the catalogue actually holds, not a
+# fixed count. As an absolute 2,800 it silently encoded a 3,210-fund catalogue,
+# so the moment the universe was deliberately cleaned to 2,710 (164 Direct plans
+# and 39 duplicate share classes removed) a correct build failed validation. A
+# ratio keeps the check meaningful -- it still catches an upstream collapse --
+# without having to be re-tuned every time the universe legitimately changes.
+MIN_SCHEMES_FRACTION = 0.95     # of the schemes the catalogue asked us to build
+MIN_SCHEMES_FLOOR = 2_000       # a catalogue this small is itself a bug
 MIN_INDEX_ROWS = 100_000        # committed history alone is ~133K
 MIN_INDICES = 30                # 36 benchmarks, 5 of them synthetic
 # NAVs older than this = upstream problem. Was 5; raised to 6 because
@@ -77,6 +90,7 @@ def validate(db_path: str, max_staleness: int):
             "SELECT COUNT(DISTINCT index_id) FROM index_history"
         ).fetchone()[0]
         index_as_of = conn.execute("SELECT MAX(date) FROM index_history").fetchone()[0]
+        conn_total = conn.execute("SELECT COUNT(*) FROM schemes").fetchone()[0]
     finally:
         conn.close()
 
@@ -94,10 +108,16 @@ def validate(db_path: str, max_staleness: int):
     if indices_with_data < MIN_INDICES:
         _fail(f"only {indices_with_data} indices have data (expected >= {MIN_INDICES})")
 
-    if rows < MIN_NAV_ROWS:
-        _fail(f"only {rows:,} NAV rows (expected >= {MIN_NAV_ROWS:,})")
-    if with_data < MIN_SCHEMES_WITH_DATA:
-        _fail(f"only {with_data} schemes have NAV data (expected >= {MIN_SCHEMES_WITH_DATA})")
+    expected_rows = max(with_data * MIN_ROWS_PER_SCHEME, MIN_NAV_ROWS_FLOOR)
+    if rows < expected_rows:
+        _fail(f"only {rows:,} NAV rows for {with_data} schemes "
+              f"({rows // max(with_data, 1):,} each; expected at least "
+              f"{MIN_ROWS_PER_SCHEME:,} each, i.e. {expected_rows:,} total)")
+    total_schemes = conn_total or with_data
+    expected = max(int(total_schemes * MIN_SCHEMES_FRACTION), MIN_SCHEMES_FLOOR)
+    if with_data < expected:
+        _fail(f"only {with_data} of {total_schemes} schemes have NAV data "
+              f"(expected >= {expected}, i.e. {MIN_SCHEMES_FRACTION:.0%})")
     if not as_of:
         _fail("no NAV dates present")
 
@@ -213,6 +233,13 @@ def main():
     ap.add_argument("--from-date", default=None,
                     help="clip NAV history at this ISO date (default: the platform "
                          "baseline in build_db_from_api.HISTORY_START)")
+    ap.add_argument("--history-source", choices=["supabase", "mfapi"],
+                    default="supabase",
+                    help="NAV history source (default supabase: read back what "
+                         "was published and extend it with AMFI's newest day)")
+    ap.add_argument("--no-amfi-topup", action="store_true",
+                    help="skip AMFI's latest-day top-up, leaving the newest NAV "
+                         "wherever api.mfapi.in has it (a day behind AMFI)")
     args = ap.parse_args()
 
     if args.from_date is None:
@@ -247,6 +274,8 @@ def main():
             mode="history",
             index_source=None,
             from_date=args.from_date,
+            skip_amfi_topup=args.no_amfi_topup,
+            history_source=args.history_source,
         )
 
         # ── 2. Indices from Yahoo Finance ────────────────────────────────

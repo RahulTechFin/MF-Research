@@ -666,60 +666,114 @@ def rank_and_quartile(
 
 # ── E10. Consistency & Volatility Boxes ───────────────────────────────────────
 
-def consistency_top5(
+TOP_HALF = frozenset({1, 2})
+BOTTOM_HALF = frozenset({3, 4})
+
+# What "mostly in Q1/Q2" means for the consistent list: two periods in three.
+# Low enough that the box is populated in every category, high enough that a fund
+# splitting its time evenly between the halves cannot qualify.
+CONSISTENT_MIN_TOP_SHARE = 0.60
+
+
+def quartile_journeys(
     quartile_grids: dict[str, list[Optional[int]]],
     min_periods: int = 6,
-) -> list[dict]:
+    limit: int = 5,
+    extremes: int = 3,
+) -> dict[str, list[dict]]:
     """
-    E10: Top 5 consistent performers.
-    - lowest average quartile number
-    - tie-break: higher % of periods in Q1
-    - minimum min_periods non-None entries
-    Returns list of dicts: {scheme_code, avg_quartile, pct_q1, history}.
+    Classify each fund by the PATH its quartile took, and split the results into
+    lists that cannot overlap.
+
+    WHY THIS REPLACED THE OLD PAIR
+    consistency_top5 ranked on the mean quartile while volatility_top5 ranked on
+    the standard deviation of RETURNS -- two different quantities measured off two
+    different inputs. A fund that sits in Q1 every period while swinging hard in
+    absolute terms scored well on the first and badly on the second, so the same
+    name appeared in "Most Consistent" and "Most Volatile" at once. That is not a
+    display bug; the two boxes were answering different questions and neither was
+    the question the screen asks.
+
+    Both are now read off the same quartile history, which is what makes them
+    comparable and lets the overlap be ruled out by construction.
+
+    THE RULE
+      A CROSSING is a move between the top half (Q1/Q2) and the bottom half
+      (Q3/Q4) from one period to the next, in either direction.
+
+      volatile    the funds that cross most often. Ranked by crossings, then by
+                  how evenly they split their time between the halves.
+      consistent  spent at least CONSISTENT_MIN_TOP_SHARE of their periods in the
+                  top half -- "mostly Q1/Q2" -- and are NOT in the volatile list.
+
+    VOLATILE IS RESOLVED FIRST, and consistent is drawn from what is left. That is
+    the owner's tie-break ("if a fund has both, it goes under volatile") applied
+    where it belongs: between the two lists. Building it into the definition of
+    consistent instead -- demanding zero crossings -- was tried and is far too
+    strict to be useful: it left 40 of 54 category files with an empty consistent
+    box, because over eight or more periods almost no fund stays in the top half
+    without a single slip.
+
+    The two lists cannot share a fund: `consistent` explicitly excludes every
+    code already claimed by `volatile`.
+
+    BEST AND WORST are a separate question -- level, not stability -- so they are
+    share-based ("most of the time") and may overlap the two lists above. A fund
+    can be both the strongest performer and a volatile one.
+
+    Gaps are skipped rather than treated as a move: a fund with no rank for a
+    period has not travelled anywhere, so crossings are counted along the periods
+    it actually has.
     """
-    results = []
+    scored = []
     for code, history in quartile_grids.items():
         valid = [q for q in history if q is not None]
         if len(valid) < min_periods:
             continue
-        avg_q   = sum(valid) / len(valid)
-        pct_q1  = valid.count(1) / len(valid)
-        results.append({
-            "scheme_code":  code,
-            "avg_quartile": round(avg_q, 3),
-            "pct_q1":       round(pct_q1, 4),
-            "history":      history,
-        })
 
-    results.sort(key=lambda x: (x["avg_quartile"], -x["pct_q1"]))
-    return results[:5]
-
-
-def volatility_top5(
-    returns_grids: dict[str, list[Optional[float]]],
-    min_periods: int = 6,
-) -> list[dict]:
-    """
-    E10: Top 5 volatile performers.
-    - highest population σ of periodic returns
-    Returns list of dicts: {scheme_code, sigma, best, worst, best_period_label, worst_period_label}.
-    """
-    results = []
-    for code, returns in returns_grids.items():
-        valid = [r for r in returns if r is not None]
-        if len(valid) < min_periods:
-            continue
-        mean_r = sum(valid) / len(valid)
-        sigma  = math.sqrt(sum((r - mean_r) ** 2 for r in valid) / len(valid))
-        results.append({
+        top = sum(1 for q in valid if q in TOP_HALF)
+        bottom = len(valid) - top
+        crossings = sum(
+            1 for a, b in zip(valid, valid[1:])
+            if (a in TOP_HALF) != (b in TOP_HALF)
+        )
+        scored.append({
             "scheme_code": code,
-            "sigma":       round(sigma, 6),
-            "best":        max(valid),
-            "worst":       min(valid),
+            "history": history,
+            "periods": len(valid),
+            "avg_quartile": round(sum(valid) / len(valid), 3),
+            "pct_q1": round(valid.count(1) / len(valid), 4),
+            "top_share": round(top / len(valid), 4),
+            "bottom_share": round(bottom / len(valid), 4),
+            "crossings": crossings,
+            # How evenly the time splits between halves: 0 means it never left
+            # one, 0.5 means a dead heat. Breaks ties between funds that cross
+            # the same number of times.
+            "balance": round(min(top, bottom) / len(valid), 4),
         })
 
-    results.sort(key=lambda x: x["sigma"], reverse=True)
-    return results[:5]
+    volatile = sorted(
+        (s for s in scored if s["crossings"] >= 1),
+        key=lambda s: (-s["crossings"], -s["balance"], s["avg_quartile"]),
+    )[:limit]
+    claimed = {s["scheme_code"] for s in volatile}
+
+    consistent = sorted(
+        (s for s in scored
+         if s["scheme_code"] not in claimed
+         and s["top_share"] >= CONSISTENT_MIN_TOP_SHARE),
+        key=lambda s: (-s["top_share"], s["avg_quartile"], -s["pct_q1"]),
+    )[:limit]
+
+    best = sorted(
+        scored, key=lambda s: (-s["top_share"], s["avg_quartile"], -s["pct_q1"]),
+    )[:extremes]
+    worst = sorted(
+        scored, key=lambda s: (-s["bottom_share"], -s["avg_quartile"]),
+    )[:extremes]
+
+    return {"consistent": consistent, "volatile": volatile,
+            "best": best, "worst": worst}
 
 
 # ── E12. Risk Analytics ───────────────────────────────────────────────────────
