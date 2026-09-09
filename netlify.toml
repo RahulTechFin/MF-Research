@@ -7,11 +7,31 @@
   # Netlify runs this before building: exit 0 means SKIP. The nightly job commits
   # data/scheme_catalogue.json when a new fund appears, and that file is only read
   # by the pipeline, never by the site — so rebuilding for it would spend minutes
-  # producing an identical bundle. site/public/data is untracked now and cannot
-  # appear here at all; it is listed for the avoidance of doubt.
+  # producing an identical bundle.
   #
-  # $CACHED_COMMIT_REF is the commit of the last successful build.
-  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ':(exclude)data/' ':(exclude)site/public/data/'"
+  # TWO BUGS WERE FIXED HERE, AND THE FIRST HAD DEADLOCKED DEPLOYS.
+  #
+  # 1. $CACHED_COMMIT_REF IS EMPTY WHENEVER THERE IS NO BUILD CACHE — a cleared
+  #    cache, a relinked site, or a previous build that was cancelled. Unquoted
+  #    and unguarded, the command then collapsed to
+  #        git diff --quiet $COMMIT_REF -- ...
+  #    which compares the WORKING TREE against that commit. Netlify's checkout is
+  #    clean at exactly that commit, so there was no diff, exit 0, build
+  #    cancelled. And a cancelled build writes no cache, so the variable stayed
+  #    empty on the next push and it cancelled again — for ever. Once it started
+  #    skipping it could never build again, which is precisely what happened:
+  #    commits kept landing on main and the deployed bundle never moved.
+  #    The `[ -n ... ] &&` guard makes an empty value mean BUILD, not skip.
+  #
+  # 2. THE PATHSPECS RESOLVED AGAINST base = "site". Netlify runs this from the
+  #    base directory, so `.` meant site/ and `:(exclude)data/` meant
+  #    site/data/ — a path that does not exist, so it excluded nothing. It gave
+  #    the right answer for catalogue commits only by luck (data/ is not under
+  #    site/), while making every change OUTSIDE site/ invisible: a scripts/ or
+  #    netlify.toml commit looked like no change at all. `:(top)` and
+  #    `:(exclude,top)` anchor the pathspecs to the repository root regardless of
+  #    where the command runs.
+  ignore = "[ -n \"$CACHED_COMMIT_REF\" ] && git diff --quiet \"$CACHED_COMMIT_REF\" \"$COMMIT_REF\" -- ':(top)' ':(exclude,top)data/' ':(exclude,top)site/public/data/'"
 
 [build.environment]
   NODE_VERSION = "20"
