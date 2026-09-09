@@ -151,6 +151,38 @@ def prune(points: Points, retention_years: int = RETENTION_YEARS) -> Points:
     return {d: c for d, c in points.items() if d >= cutoff}
 
 
+def cap_date() -> str:
+    """
+    The newest date an index file may carry: yesterday, IST.
+
+    THE SAME RULE THE NAVs USE, imported from build_db_from_api rather than
+    restated, so a benchmark and a fund can never be compared across different
+    days. That is the whole reason this cap exists in one place.
+    """
+    from scripts.build_db_from_api import previous_business_close
+    return previous_business_close()
+
+
+def drop_after(points: Points, cap: str) -> Points:
+    """
+    Discard anything dated past the cap.
+
+    WHY THIS IS NEEDED AND WHAT IT COST TO LEARN
+    Yahoo answers a request made during market hours with a LIVE, PARTIAL bar
+    dated today. Nothing here refused it, so a refresh run at 13:08 IST stored
+    the running price of an open market as though it were 09 September's close —
+    and every 1-day change computed from it was wrong.
+    Until now the only thing preventing that was the cron firing at 23:45 IST,
+    long after the 15:30 close. A schedule is not a safeguard: any manual run, a
+    re-run of a failed job, or a retry at the wrong hour reintroduces it. Capping
+    the DATA is the safeguard.
+
+    Applied to the published points as well as to the incoming rows, so a bad
+    value already in the bucket is corrected rather than carried forward.
+    """
+    return {d: c for d, c in points.items() if d <= cap}
+
+
 def validate_one(new: Points, old: Points) -> list[str]:
     """Reasons not to replace the published file. Empty list means safe."""
     problems = []
@@ -178,7 +210,22 @@ def refresh_one(index_id: int, name: str, slug: str, ticker: str,
     from scripts.yahoo_chart import fetch_daily_closes
 
     floor = (date.today() - timedelta(days=365 * RETENTION_YEARS + 7)).isoformat()
-    published = {} if force_seed else pull_one(slug)
+    cap = cap_date()
+    # The published file is capped BEFORE anything else looks at it. It is what
+    # validate_one compares against, and comparing a capped result against an
+    # uncapped baseline would make the "newest date went backwards" gate reject
+    # the very correction that removes a bad intraday point.
+    # TWO VIEWS OF THE PUBLISHED FILE, and the difference matters.
+    #   on_disk  exactly what the bucket holds, including any point past the cap
+    #   published the capped baseline that validate_one compares against
+    # Capping the baseline is what stops the "newest date went backwards" gate
+    # from rejecting the correction that REMOVES a bad intraday point. Keeping
+    # on_disk is what makes that correction get uploaded at all: the decision to
+    # skip an upload has to be "does the FILE already say this", not "does the
+    # capped view match" — those differ precisely when a trim is needed, which is
+    # the one case that must not be skipped.
+    on_disk = {} if force_seed else pull_one(slug)
+    published = drop_after(on_disk, cap)
     points = dict(published)
 
     if not points and seed:
@@ -197,18 +244,25 @@ def refresh_one(index_id: int, name: str, slug: str, ticker: str,
 
     for d, close in rows:
         points[d] = close
-    points = prune(points)
+    points = drop_after(prune(points), cap)
 
     problems = validate_one(points, published)
     if problems:
         return None, problems
 
     gained = len(points) - len(prune(published)) if published else len(points)
-    if published and points == prune(published):
+    if on_disk and points == prune(on_disk):
         log.info("  %-22s already current (%s)", name, max(points))
         return None, []
 
-    log.info("  %-22s %+d points, newest %s", name, gained, max(points))
+    trimmed = len(prune(on_disk)) - len(published) if on_disk else 0
+    if trimmed > 0:
+        log.warning("  %-22s dropping %d point(s) dated past the %s cap — a "
+                    "refresh had stored an open market's running price as a "
+                    "close", name, trimmed, cap)
+
+    log.info("  %-22s %+d points, newest %s (cap %s)", name, gained,
+             max(points), cap)
     return build_payload(index_id, name, slug, points), []
 
 

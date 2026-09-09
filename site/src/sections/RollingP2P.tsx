@@ -12,6 +12,11 @@
 
 import { useMemo, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
+import CategoryPicker from '../components/CategoryPicker'
+import { categoryColor } from '../config/categoryColors'
+import { useTableSort, sortRows } from '../hooks/useTableSort'
+import DownloadButton from '../components/DownloadButton'
+import type { SheetSpec } from '../utils/xlsx'
 import { useMeta, useCategoryTable, useNavSeriesMany, useIndexSeries } from '../hooks/useData'
 import { fmtPct, retColor, shortFundName } from '../utils/format'
 import { pointToPoint, trailingFrom, average, TRAILING } from '../utils/returns'
@@ -34,6 +39,9 @@ interface Row {
   r: PeriodReturn
   vsBench: number | null
 }
+
+/** Above this many categories a row of chips stops being readable. */
+const CHIP_LIMIT = 12
 
 export default function RollingP2P() {
   const { data: meta } = useMeta()
@@ -101,6 +109,52 @@ export default function RollingP2P() {
     out.sort((a, b) => (b.r.ret ?? -Infinity) - (a.r.ret ?? -Infinity))
     return out
   }, [codes, series, names, mode, from, to, anchor, window, bench.ret])
+
+  const sort = useTableSort()
+  // rows already arrives sorted by return, descending — the section's own
+  // ranking. sortRows leaves it exactly so until a heading is clicked.
+  const visibleRows = sortRows(rows, sort,
+    (r, k) => k === 'fund' ? r.name
+            : k === 'ret' ? r.r.ret
+            : k === 'vs' ? r.vsBench
+            : k === 'start' ? r.r.startDate
+            : k === 'end' ? r.r.endDate
+            : null)
+
+  const buildExport = (): SheetSpec | null => {
+    if (!rows.length) return null
+    const label = mode === 'p2p' ? `${from} to ${to}` : `rolling ${window}`
+    return {
+      sheet: `Rolling ${mode === 'p2p' ? 'P2P' : window}`,
+      title: `Rolling & Point-to-Point - ${catInfo?.category_name ?? activeSlug}`,
+      meta: [
+        ['Category', catInfo?.category_name ?? activeSlug],
+        ['Mode', mode === 'p2p' ? 'Point to point' : 'Rolling window'],
+        ['Period', label],
+        ['Measured', windowLabel],
+        ['Benchmark', catInfo?.benchmark_name ?? '-'],
+        ['Benchmark return', bench.ret != null ? `${(bench.ret * 100).toFixed(2)}%` : 'n/a'],
+        ['Funds', `${rows.length} of ${total} have a full window`],
+        ['Note', 'Only funds with NAVs covering the whole window appear. '
+               + 'vs Benchmark is the fund return minus the benchmark return.'],
+      ],
+      columns: [
+        { key: 'fund', label: 'Fund Name', type: 'text', width: 46 },
+        { key: 'ret', label: 'Return', type: 'percent' },
+        { key: 'vs', label: 'vs Benchmark', type: 'percent' },
+        { key: 'start', label: 'Start date', type: 'text', width: 13 },
+        { key: 'end', label: 'End date', type: 'text', width: 13 },
+      ],
+      rows: visibleRows.map(r => ({
+        fund: r.name,
+        ret: r.r.ret ?? null,
+        vs: r.vsBench ?? null,
+        start: r.r.startDate ?? '',
+        end: r.r.endDate ?? '',
+      })),
+      fileName: `Rolling P2P - ${catInfo?.category_name ?? activeSlug} - ${label} - ${anchor}`,
+    }
+  }
 
   const avg = average(rows.map(r => r.r.ret))
   const beat = bench.ret != null ? rows.filter(r => (r.r.ret ?? 0) > bench.ret!).length : null
@@ -275,19 +329,30 @@ export default function RollingP2P() {
           )}
           <div>
             <label className="text-xs block mb-1" style={{ color: 'var(--text-mid)' }}>Category</label>
-            <select value={activeSlug} onChange={e => setSlug(e.target.value)}
-              className={dateInput} style={inputStyle}>
-              {allCats.map(c => <option key={c.slug} value={c.slug}>{c.category_name}</option>)}
-            </select>
+            {/* Short lists get chips, so the colour that identifies a category
+                everywhere else is visible here too. 41 of them stay a dropdown. */}
+            {allCats.length <= CHIP_LIMIT ? (
+              <CategoryPicker cats={allCats} active={activeSlug} onChange={setSlug} />
+            ) : (
+              <select value={activeSlug} onChange={e => setSlug(e.target.value)}
+                className={dateInput}
+                style={{ ...inputStyle, borderColor: categoryColor(activeSlug, catInfo?.asset_class) }}>
+                {allCats.map(c => <option key={c.slug} value={c.slug}>{c.category_name}</option>)}
+              </select>
+            )}
           </div>
 
-          <div className="ml-auto text-xs text-right" style={{ color: 'var(--text-low)' }}>
+          <div className="ml-auto flex items-center gap-3">
+          <DownloadButton build={buildExport}
+                          disabledHint="No fund has a full window for these dates" />
+          <div className="text-xs text-right" style={{ color: 'var(--text-low)' }}>
             <div>measured {windowLabel}</div>
             <div>
               {loading
                 ? `loading NAVs ${loaded}/${total} …`
                 : `${rows.length} of ${total} funds have a full window`}
             </div>
+          </div>
           </div>
         </div>
         {mode === 'p2p' && (

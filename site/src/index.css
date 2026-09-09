@@ -353,6 +353,32 @@ h1, h2, h3, h4, h5, h6 {
    CategorySnapshot). The rules below must out-specify
    `.data-table tr:hover td` and `.data-table .pinned-row td`, both of which set
    the shorthand `background` and would otherwise wipe it back to translucent. */
+/* ── Frozen panes ───────────────────────────────────────────────────────────
+   WHY A MAX HEIGHT IS WHAT MAKES THE HEADER STICK
+   `.data-table th` has had `position: sticky; top: 0` all along and it did
+   nothing, because the table sits in a wrapper that scrolls horizontally. When
+   overflow-x is auto the used value of overflow-y becomes auto too, so that
+   wrapper — not the viewport — is the nearest scrolling ancestor, and `top: 0`
+   pinned the header to the top of a box that had no height of its own and
+   therefore simply scrolled away with the page.
+
+   Capping the height makes the wrapper scroll internally, which is the box the
+   header is already sticky against. The result is Excel's frozen panes: the time
+   frame headings hold across a vertical scroll, the fund name holds across a
+   horizontal one, and the pinned Benchmark / Category Average footer — which
+   also had `position: sticky; bottom: 0` going spare — now holds too.
+
+   Tuned to leave the freeze row, the section heading and the controls visible
+   above it. Override --table-max-h on a wrapper that needs a different budget. */
+.table-scroll {
+  overflow: auto;
+  max-height: var(--table-max-h, calc(100vh - 240px));
+  overscroll-behavior-x: contain;
+}
+
+/* A short table must not grow a scrollbar just because it is allowed to. */
+.table-scroll > table { margin-bottom: 0; }
+
 .sticky-col {
   position: sticky;
   left: 0;
@@ -771,4 +797,154 @@ h1, h2, h3, h4, h5, h6 {
   .view-enter,
   .rows-enter { animation: none; }
   .q-pill { transition: none; }
+}
+
+/* ── Category picker ────────────────────────────────────────────────────────
+   Used where a desk's categories match none of the mutual fund main-tab names,
+   which would otherwise bury every one of them in a dropdown. The colour is set
+   inline from the slug (see config/categoryColors) so the same category is the
+   same colour on every screen. */
+.cat-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.cat-picker.vertical {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 260px;
+  max-width: 340px;
+}
+
+.cat-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition),
+              color var(--transition), transform var(--transition);
+}
+.cat-picker.vertical .cat-chip { width: 100%; }
+.cat-chip:hover { transform: translateY(-1px); }
+.cat-picker.vertical .cat-chip:hover { transform: translateX(2px); }
+.cat-chip.active { font-weight: 600; }
+.cat-chip:focus-visible {
+  outline: 2px solid var(--accent-a);
+  outline-offset: 2px;
+}
+
+/* The dot carries the identity even when the chip is not selected, which is what
+   lets two strategies in the same asset class be told apart at rest. */
+.cat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.cat-label { flex: 1; }
+.cat-n {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* The screener's pills gain the same dot. */
+.pill .cat-dot { margin-right: 6px; vertical-align: middle; }
+
+/* Second line of a table column heading — the months a quarter covers, or the
+   year under a month name. Muted and small so the heading still reads as one
+   thing rather than two competing labels. */
+.period-sub {
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--text-low);
+  letter-spacing: 0;
+  margin-top: 1px;
+}
+
+/* Fund count on a screener pill. */
+.pill-n {
+  margin-left: 6px;
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Download button ────────────────────────────────────────────────────────
+   Sits in a row of toggles, so it borrows their height and radius but stays
+   visually quieter than an active toggle: this is an action, not a state, and it
+   should not compete with the comparison mode that IS selected. */
+.download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-mid);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--transition), border-color var(--transition),
+              background var(--transition);
+}
+.download-btn:hover {
+  color: var(--accent-a);
+  border-color: var(--accent-a);
+}
+.download-btn:focus-visible {
+  outline: 2px solid var(--accent-a);
+  outline-offset: 2px;
+}
+/* Confirmation is the same button changing, not a toast: the eye is already
+   here, and a file landing in Downloads is easy to miss otherwise. */
+.download-btn.done {
+  color: var(--gain);
+  border-color: var(--gain);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+/* ── Sortable column headings ───────────────────────────────────────────────
+   The whole heading is the control, so the target is the size of the cell
+   rather than a small glyph inside it. The arrow only appears on the column
+   actually in use; the others show it on hover, so a wall of arrows does not
+   compete with the data. */
+.data-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.data-table th.sortable:hover {
+  color: var(--text-hi);
+  background: var(--bg-hover), var(--bg-raised);
+}
+.data-table th.sortable .sort-caret {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 8px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+.data-table th.sortable:hover .sort-caret { opacity: 0.45; }
+.data-table th.sortable.sorted {
+  color: var(--accent-a);
+}
+.data-table th.sortable.sorted .sort-caret {
+  opacity: 1;
+  color: var(--accent-a);
+}
+.data-table th.sortable:focus-visible {
+  outline: 2px solid var(--accent-a);
+  outline-offset: -2px;
 }

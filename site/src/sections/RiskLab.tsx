@@ -1,8 +1,13 @@
 // src/sections/RiskLab.tsx — Section 8: Risk Lab (INTERNAL USE ONLY)
 
-import { useState, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useMeta, useRisk, useDrawdown } from '../hooks/useData'
+import CategoryPicker from '../components/CategoryPicker'
+import { categoryColor } from '../config/categoryColors'
+import { useTableSort, sortRows } from '../hooks/useTableSort'
+import DownloadButton from '../components/DownloadButton'
+import type { SheetSpec } from '../utils/xlsx'
 import { fmtPct } from '../utils/format'
 
 const METRIC_INFO: Record<string, string> = {
@@ -28,18 +33,45 @@ const MAIN_TAB_NAMES = [
   'Multi Asset Allocation'
 ]
 
-function MetricHeader({ label, metric }: { label: string; metric: string }) {
+/**
+ * A metric heading that both explains itself and sorts.
+ *
+ * The explanation was already here and is the more valuable of the two — most of
+ * these measures are unreadable without knowing which direction is good — so
+ * sorting was added AROUND it rather than replacing it with a plain title
+ * attribute. The cell keeps its hover card and gains a click.
+ */
+function MetricHeader({ label, metric, sort }:
+                      { label: string; metric: string
+                        sort: ReturnType<typeof useTableSort> }) {
   const [show, setShow] = useState(false)
+  const hp = sort.headerProps(metric)
   return (
-    <th className="ret-cell relative cursor-help" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+    <th
+      className={`ret-cell relative ${hp.className}`}
+      onClick={hp.onClick}
+      onKeyDown={hp.onKeyDown}
+      role={hp.role}
+      tabIndex={hp.tabIndex}
+      aria-sort={hp['aria-sort']}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
       {label} <span style={{ color: 'var(--accent-a)' }}>ⓘ</span>
+      <span className="sort-caret">{sort.caret(metric)}</span>
       {show && (
         <div className="absolute z-50 p-2 text-xs rounded-lg shadow-xl"
           style={{
-            background: 'var(--bg-card)', border: '1px solid var(--line)', color: 'var(--text-mid)',
-            bottom: '100%', left: '50%', transform: 'translateX(-50%)', width: 200, whiteSpace: 'normal', lineHeight: 1.4,
+            background: 'var(--bg-card)', border: '1px solid var(--line)',
+            color: 'var(--text-mid)', bottom: '100%', left: '50%',
+            transform: 'translateX(-50%)', width: 210, whiteSpace: 'normal',
+            lineHeight: 1.4, fontWeight: 400, textTransform: 'none',
+            letterSpacing: 0,
           }}>
           {METRIC_INFO[metric]}
+          <div className="mt-1" style={{ color: 'var(--text-low)' }}>
+            Click to sort by this column.
+          </div>
         </div>
       )}
     </th>
@@ -54,7 +86,7 @@ export default function RiskLab() {
   const allCats = meta?.categories ?? []
   const activeSlug = slug || (allCats[0]?.slug ?? '')
 
-  const { data: riskData, loading } = useRisk(activeSlug)
+  const { data: riskData, loading, error } = useRisk(activeSlug)
   const { data: ddData }            = useDrawdown(selectedFund)
 
   // Auto-select first fund on load or category change
@@ -67,7 +99,59 @@ export default function RiskLab() {
   }, [riskData])
 
   // Get active category information
+  const sort = useTableSort()
+  // Composite score, descending, is this table's own ranking and stays the
+  // resting order — sortRows returns it untouched until a heading is clicked.
+  const rankedRiskFunds = useMemo(
+    () => [...(riskData?.funds ?? [])]
+      .sort((a, b) => (b.composite_score ?? 0) - (a.composite_score ?? 0)),
+    [riskData])
+  const sortedRiskFunds = sortRows(rankedRiskFunds, sort,
+    (f, k) => k === 'fund' ? f.scheme_name
+            : (f as unknown as Record<string, unknown>)[k])
+
   const activeCatInfo = allCats.find(c => c.slug === activeSlug)
+
+  const buildExport = (): SheetSpec | null => {
+    if (!riskData) return null
+    return {
+      sheet: 'Risk Lab',
+      title: `Risk Lab - ${activeCatInfo?.category_name ?? activeSlug}`,
+      meta: [
+        ['Category', activeCatInfo?.category_name ?? activeSlug],
+        ['Benchmark', activeCatInfo?.benchmark_name ?? '-'],
+        ['Data as of', riskData.as_of],
+        ['Risk-free rate', `${(riskData.risk_free_rate * 100).toFixed(1)}% p.a.`],
+        ['Funds', String(riskData.funds.length)],
+        ['Basis', 'Annualised from monthly returns over about 30 months. An empty '
+                + 'cell means the fund has too little history for that measure.'],
+      ],
+      columns: [
+        { key: 'fund', label: 'Fund Name', type: 'text', width: 46 },
+        { key: 'std_annual', label: 'Std Dev (ann.)', type: 'percent' },
+        { key: 'sharpe', label: 'Sharpe', type: 'number' },
+        { key: 'sortino', label: 'Sortino', type: 'number' },
+        { key: 'beta', label: 'Beta', type: 'number' },
+        { key: 'alpha', label: 'Alpha', type: 'percent' },
+        { key: 'max_drawdown', label: 'Max Drawdown', type: 'percent' },
+        { key: 'recovery_days', label: 'Recovery (days)', type: 'int' },
+        { key: 'upside_capture', label: 'Upside Capture', type: 'number' },
+        { key: 'downside_capture', label: 'Downside Capture', type: 'number' },
+        { key: 'composite_score', label: 'Composite Score', type: 'number' },
+        { key: 'fund_3y_cagr', label: 'Fund 3Y CAGR', type: 'percent' },
+        { key: 'bench_3y_cagr', label: 'Benchmark 3Y CAGR', type: 'percent' },
+      ],
+      rows: sortedRiskFunds.map(f => ({
+        fund: f.scheme_name,
+        std_annual: f.std_annual, sharpe: f.sharpe, sortino: f.sortino,
+        beta: f.beta, alpha: f.alpha, max_drawdown: f.max_drawdown,
+        recovery_days: f.recovery_days, upside_capture: f.upside_capture,
+        downside_capture: f.downside_capture, composite_score: f.composite_score,
+        fund_3y_cagr: f.fund_3y_cagr, bench_3y_cagr: f.bench_3y_cagr,
+      })),
+      fileName: `Risk Lab - ${activeCatInfo?.category_name ?? activeSlug} - ${riskData.as_of}`,
+    }
+  }
   const categoryBenchmarkName = activeCatInfo?.benchmark_name || 'Benchmark'
 
   // Dynamic colors matching active theme (light / dark)
@@ -176,23 +260,38 @@ export default function RiskLab() {
         🔒 <strong>INTERNAL USE ONLY</strong> — This section is for internal research purposes only. Not for client distribution or public sharing.
       </div>
 
-      <div className="section-header">Risk Lab</div>
+      <div className="section-header">
+        <span>Risk Lab</span>
+        <span className="ml-auto"><DownloadButton build={buildExport}
+              disabledHint="No risk figures for this category yet" /></span>
+      </div>
 
-      {/* Category selector (Tabs + Dropdown) */}
+      {/* Category selector. A desk whose categories match none of the mutual
+          fund main-tab names shows all of them as coloured chips instead of
+          burying every one in the dropdown. */}
       <div className="flex gap-2 flex-wrap items-center mb-4">
+        {mainTabs.length === 0 ? (
+          <CategoryPicker cats={allCats} active={activeSlug} onChange={setSlug} />
+        ) : (
         <div className="tab-bar">
-          {mainTabs.map(c => (
-            <button
-              key={c.slug}
-              onClick={() => setSlug(c.slug)}
-              className={`tab-btn${activeSlug === c.slug ? ' active accent' : ''}`}
-            >
-              {c.category_name}
-            </button>
-          ))}
+          {mainTabs.map(c => {
+            const colour = categoryColor(c.slug, c.asset_class)
+            const on = activeSlug === c.slug
+            return (
+              <button
+                key={c.slug}
+                onClick={() => setSlug(c.slug)}
+                className={`tab-btn${on ? ' active' : ''}`}
+                style={on ? { color: colour, background: `${colour}1f` } : undefined}
+              >
+                {c.category_name}
+              </button>
+            )
+          })}
         </div>
+        )}
 
-        {otherCats.length > 0 && (
+        {mainTabs.length > 0 && otherCats.length > 0 && (
           <select
             value={mainTabs.some(c => c.slug === activeSlug) ? '' : activeSlug}
             onChange={e => { if (e.target.value) setSlug(e.target.value) }}
@@ -226,26 +325,25 @@ export default function RiskLab() {
             {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-8 w-full" />)}
           </div>
         ) : riskData ? (
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
                   <th className="sticky-col text-left" style={{ minWidth: 240 }}>Fund</th>
-                  <MetricHeader label="σ ann." metric="std_annual" />
-                  <MetricHeader label="Sharpe" metric="sharpe" />
-                  <MetricHeader label="Sortino" metric="sortino" />
-                  <MetricHeader label="Beta" metric="beta" />
-                  <MetricHeader label="Alpha" metric="alpha" />
-                  <MetricHeader label="Max DD" metric="max_drawdown" />
-                  <MetricHeader label="Recovery" metric="recovery_days" />
-                  <MetricHeader label="Up Cap" metric="upside_capture" />
-                  <MetricHeader label="Dn Cap" metric="downside_capture" />
-                  <MetricHeader label="Score" metric="composite_score" />
+                  <MetricHeader sort={sort} label="σ ann." metric="std_annual" />
+                  <MetricHeader sort={sort} label="Sharpe" metric="sharpe" />
+                  <MetricHeader sort={sort} label="Sortino" metric="sortino" />
+                  <MetricHeader sort={sort} label="Beta" metric="beta" />
+                  <MetricHeader sort={sort} label="Alpha" metric="alpha" />
+                  <MetricHeader sort={sort} label="Max DD" metric="max_drawdown" />
+                  <MetricHeader sort={sort} label="Recovery" metric="recovery_days" />
+                  <MetricHeader sort={sort} label="Up Cap" metric="upside_capture" />
+                  <MetricHeader sort={sort} label="Dn Cap" metric="downside_capture" />
+                  <MetricHeader sort={sort} label="Score" metric="composite_score" />
                 </tr>
               </thead>
               <tbody key={slug} className="rows-enter">
-                {[...riskData.funds]
-                  .sort((a, b) => (b.composite_score ?? 0) - (a.composite_score ?? 0))
+                {sortedRiskFunds
                   .map(fund => (
                     <tr key={fund.scheme_code}
                       className={`cursor-pointer${selectedFund === fund.scheme_code ? ' bg-[rgba(34,211,238,0.08)]' : ''}`}
@@ -289,7 +387,34 @@ export default function RiskLab() {
           </div>
         ) : (
           <div className="p-8 text-center" style={{ color: 'var(--text-mid)' }}>
-            No risk data yet. Complete the backfill first (min 30 months required).
+            {error && /\b(404|400)\b/.test(error) ? (
+              <>
+                <div style={{ color: 'var(--text-hi)', marginBottom: 4 }}>
+                  No funds in this category yet.
+                </div>
+                <div className="text-xs">
+                  Nothing to measure until a scheme is launched under this strategy.
+                </div>
+              </>
+            ) : error ? (
+              <>
+                <div style={{ color: 'var(--loss)', marginBottom: 4 }}>
+                  Could not load the risk table.
+                </div>
+                <div className="text-xs">{error}</div>
+              </>
+            ) : (
+              <>
+                <div style={{ color: 'var(--text-hi)', marginBottom: 4 }}>
+                  Not enough history for risk measures yet.
+                </div>
+                <div className="text-xs">
+                  Standard deviation, Sharpe, beta and the rest are annualised from
+                  about 30 months of monthly returns. A newly launched category has
+                  nowhere near that, and a partial figure would be worse than none.
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

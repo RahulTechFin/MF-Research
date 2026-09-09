@@ -1,8 +1,13 @@
 // src/sections/FundScreener.tsx — Section 4: Fund Screener (main returns table) + dynamic Leaders & Laggards
 
 import { useState, useEffect } from 'react'
-import { useMeta, useCategoryTable } from '../hooks/useData'
+import { useMeta, useCategoryTable, useGlance } from '../hooks/useData'
 import { fmtPct, heatmapClass, retColor, assetClassColor } from '../utils/format'
+import { categoryColor } from '../config/categoryColors'
+import DownloadButton from '../components/DownloadButton'
+import type { SheetSpec } from '../utils/xlsx'
+import { orderPeriods, periodLabelParts } from '../utils/periods'
+import { useTableSort, sortRows } from '../hooks/useTableSort'
 import { ALL_SECTORS, SECTORAL_THEMATIC_SLUG, sectorOf, sectorOptions } from '../utils/sectors'
 import type { ViewType, AssetClass } from '../types'
 
@@ -43,47 +48,6 @@ const COMPARE_MODES: { key: Exclude<CompareMode, 'none'>; label: string; hint: s
 /** Ties in floating point are meaningless here; treat a hair's breadth as equal. */
 const COMPARE_EPSILON = 1e-9
 
-function formatPeriodHeader(pk: string): string {
-  // YYYY-MM
-  if (/^\d{4}-\d{2}$/.test(pk)) {
-    const [y, m] = pk.split('-')
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    const monthIdx = parseInt(m, 10) - 1
-    if (monthIdx >= 0 && monthIdx < 12) {
-      return `${months[monthIdx]} ${y}`
-    }
-  }
-  // Q#-YYYY, which is what build_json emits ("Q3-2024"). This used to test for
-  // YYYY-Q# and so never matched, leaving the raw key on screen.
-  const q = /^Q([1-4])-(\d{4})$/.exec(pk)
-  if (q) return `Q${q[1]} ${q[2]}`
-  return pk
-}
-
-/**
- * Chronological rank of a period column, newest highest.
- *
- * Sorting these keys as plain strings was wrong for quarters and only quarters.
- * "Q3-2024" puts the quarter BEFORE the year, so a descending string sort
- * compares the quarter digit first and interleaves the years:
- *
- *     QTD, Q4-2025, Q4-2024, Q3-2025, Q3-2024, Q2-2026, Q2-2025, Q1-2026, Q1-2025
- *
- * For a fund launched partway through, that reads as data, data, blank, data,
- * blank — which looks exactly like the engine failing to compute some quarters,
- * when in fact the columns were out of order. Monthly ("2025-08") and annual
- * ("2024") keys lead with the year, so they were never affected.
- */
-function periodRank(pk: string): number {
-  if (pk === 'MTD' || pk === 'QTD' || pk.startsWith('YTD')) return Number.MAX_SAFE_INTEGER
-  const m = /^(\d{4})-(\d{2})$/.exec(pk)
-  if (m) return Number(m[1]) * 100 + Number(m[2])
-  const q = /^Q([1-4])-(\d{4})$/.exec(pk)
-  if (q) return Number(q[2]) * 100 + Number(q[1]) * 3
-  const y = /^(\d{4})$/.exec(pk)
-  if (y) return Number(y[1]) * 100
-  return -1
-}
 
 /**
  * One return cell, shaded by whichever comparison is selected.
@@ -230,7 +194,7 @@ function LeadersLaggards({ filteredFunds, categoryAvg }: MoversProps) {
             style={{ background: 'var(--bg-hover)', borderBottom: '1px solid var(--line)', color: 'var(--gain)' }}>
             ⬆ Top 10 Performers
           </div>
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="data-table">
               <thead><tr><th>#</th><th className="text-left">Fund</th><th className="ret-cell">Return</th><th className="ret-cell">vs Avg</th></tr></thead>
               <tbody key={period} className="rows-enter">
@@ -262,7 +226,7 @@ function LeadersLaggards({ filteredFunds, categoryAvg }: MoversProps) {
             style={{ background: 'var(--bg-hover)', borderBottom: '1px solid var(--line)', color: 'var(--loss)' }}>
             ⬇ Top 10 Underperformers
           </div>
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="data-table">
               <thead><tr><th>#</th><th className="text-left">Fund</th><th className="ret-cell">Return</th><th className="ret-cell">vs Avg</th></tr></thead>
               <tbody key={period} className="rows-enter">
@@ -315,12 +279,25 @@ export default function FundScreener({ selectedFunds, onToggleFund,
   // The code to highlight once, right after a search pick.
   const [highlight, setHighlight] = useState<string | null>(null)
 
+  // Fund counts per category. meta.json does not carry them, and the glance file
+  // does -- and it OMITS a category with no funds altogether, which is exactly
+  // the signal needed to mark one as empty before it is clicked.
+  const { data: glance } = useGlance('trailing')
+  const fundCount = new Map((glance?.rows ?? []).map(r => [r.slug, r.fund_count]))
+
+  // Asset-class tabs come from the categories that exist, not from a fixed list.
+  // The list named Equity/Hybrid/Debt/Other, so the SIF desk -- which has no
+  // Other categories at all -- showed an Other tab leading to an empty screen.
+  const presentAssets = ASSET_CLASSES.filter(
+    ac => (meta?.categories ?? []).some(c => c.asset_class === ac))
+
   const categories = (meta?.categories ?? []).filter(c => c.asset_class === activeAsset)
 
   // Set first slug when asset/categories change
   const slug = activeSlug || (categories[0]?.slug ?? '')
 
-  const { data: tableData, loading } = useCategoryTable(slug, view)
+  const { data: tableData, loading, error } = useCategoryTable(slug, view)
+  const sort = useTableSort()
 
   // Reset sector sub-filter when active category slug changes
   useEffect(() => {
@@ -370,9 +347,81 @@ export default function FundScreener({ selectedFunds, onToggleFund,
   }
 
   // Sorting columns descending (latest first) for quarterly, annual, and monthly views
-  const sortedPeriodKeys = [...(tableData?.period_keys ?? [])]
-  if (view !== 'trailing') {
-    sortedPeriodKeys.sort((a, b) => periodRank(b) - periodRank(a))
+  const sortedPeriodKeys = orderPeriods(tableData?.period_keys ?? [], view)
+
+  /**
+   * Filter first, then sort. The name filter narrows WHICH funds are in play and
+   * the sort only orders them, so the two compose rather than competing — and
+   * the export below reads this same list, which is why what you download always
+   * matches what you are looking at, in the same order.
+   */
+  const visibleFunds = sortRows(filteredFunds, sort,
+    (f, k) => k === 'fund' ? f.scheme_name
+            : k === 'amc' ? f.amc_name
+            : f.returns[k])
+
+  /**
+   * The visible table as a workbook.
+   *
+   * WHAT IT EXPORTS IS WHAT IS ON SCREEN — the same category, the same view, the
+   * same period order and the same rows after the name filter and any sector
+   * sub-filter. An export that quietly returned everything would not match what
+   * the person pressing the button just looked at.
+   *
+   * The two pinned summary rows come out last, as they appear in the footer.
+   */
+  const buildExport = (): SheetSpec | null => {
+    if (!tableData) return null
+    const periodCols = sortedPeriodKeys.map(pk => {
+      const { main, sub } = periodLabelParts(pk)
+      return { key: pk, label: sub ? `${main} ${sub}` : main, type: 'percent' as const }
+    })
+    const rows: SheetSpec['rows'] = visibleFunds.map(f => ({
+      fund: f.scheme_name,
+      amc: f.amc_name,
+      ...Object.fromEntries(sortedPeriodKeys.map(pk => [pk, f.returns[pk] ?? null])),
+    }))
+    if (rows.length) {
+      rows.push({ group: 'Comparison' })
+      rows.push({
+        fund: `Benchmark — ${benchmarkName}`, amc: '',
+        ...Object.fromEntries(sortedPeriodKeys.map(pk => [pk, tableData.benchmark[pk] ?? null])),
+      })
+      rows.push({
+        fund: 'Category Average', amc: '',
+        ...Object.fromEntries(sortedPeriodKeys.map(
+          pk => [pk, getCategoryAvgForPeriod(pk) ?? null])),
+      })
+    }
+    const scope = isSectoral && selectedSector !== ALL_SECTORS
+      ? `${tableData.category_name} - ${selectedSector}`
+      : tableData.category_name
+    return {
+      sheet: scope,
+      title: `Fund Screener - ${scope}`,
+      meta: [
+        ['Category', tableData.category_name],
+        ...(isSectoral && selectedSector !== ALL_SECTORS
+          ? [['Sector', selectedSector] as [string, string]] : []),
+        ['View', VIEWS.find(v => v.key === view)?.label ?? view],
+        ['Benchmark', benchmarkName],
+        ['Data as of', tableData.as_of],
+        ['Funds', String(filteredFunds.length)],
+        ...(nameFilter ? [['Name filter', nameFilter] as [string, string]] : []),
+        ['Returns', 'Stored as ratios and shown as percentages. An empty cell '
+                  + 'means the fund has too little history for that period, '
+                  + 'which is not the same as a zero return.'],
+        ['Column order', view === 'trailing' ? 'Shortest to longest period'
+                                             : 'Latest to oldest, left to right'],
+      ],
+      columns: [
+        { key: 'fund', label: 'Fund Name', type: 'text', width: 46 },
+        { key: 'amc', label: 'AMC', type: 'text', width: 24 },
+        ...periodCols,
+      ],
+      rows,
+      fileName: `Fund Screener - ${scope} - ${view} - ${tableData.as_of}`,
+    }
   }
 
   const categoryInfo = meta?.categories.find(c => c.slug === slug)
@@ -384,7 +433,7 @@ export default function FundScreener({ selectedFunds, onToggleFund,
 
       {/* Level 1: Asset class tabs */}
       <div className="tab-bar mb-3">
-        {ASSET_CLASSES.map(ac => (
+        {presentAssets.map(ac => (
           <button key={ac} onClick={() => { setActiveAsset(ac); setActiveSlug('') }}
             className={`tab-btn${activeAsset === ac ? ` active ${ac.toLowerCase()}` : ''}`}>
             {ac}
@@ -394,12 +443,33 @@ export default function FundScreener({ selectedFunds, onToggleFund,
 
       {/* Level 2: Sub-category pills */}
       <div className="flex gap-2 flex-wrap mb-4">
-        {categories.map(cat => (
-          <button key={cat.slug} onClick={() => setActiveSlug(cat.slug)}
-            className={`pill${(activeSlug || categories[0]?.slug) === cat.slug ? ' active' : ''}`}>
-            {cat.category_name}
-          </button>
-        ))}
+        {categories.map(cat => {
+          const colour = categoryColor(cat.slug, cat.asset_class)
+          const on = (activeSlug || categories[0]?.slug) === cat.slug
+          // Absent from the glance file means no funds. Unknown (glance not
+          // loaded) shows no badge rather than a misleading zero.
+          const n = glance ? (fundCount.get(cat.slug) ?? 0) : null
+          const empty = n === 0
+          return (
+            <button key={cat.slug} onClick={() => setActiveSlug(cat.slug)}
+              className={`pill${on ? ' active' : ''}`}
+              style={{
+                borderColor: on ? colour : undefined,
+                background: on ? `${colour}1f` : undefined,
+                color: on ? colour : undefined,
+                opacity: empty ? 0.55 : undefined,
+              }}
+              title={empty ? `${cat.category_name} — no funds` : cat.category_name}>
+              <span className="cat-dot" style={{ background: colour }} aria-hidden="true" />
+              {cat.category_name}
+              {n != null && (
+                <span className="pill-n" style={{ color: on ? colour : 'var(--text-low)' }}>
+                  {n}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {/* Sector Sub-filter dropdown for Sectoral/Thematic category */}
@@ -474,6 +544,10 @@ export default function FundScreener({ selectedFunds, onToggleFund,
               {m.label}
             </button>
           ))}
+          {/* Right of the comparison toggles, because what it exports depends on
+              which of them is showing. */}
+          <DownloadButton build={buildExport}
+                          disabledHint="This category has no funds to export" />
         </div>
       </div>
 
@@ -486,28 +560,44 @@ export default function FundScreener({ selectedFunds, onToggleFund,
             ))}
           </div>
         ) : tableData ? (
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <div className="px-4 py-2 flex items-center justify-between border-b" style={{ borderColor: 'var(--line)', background: 'var(--bg-raised)' }}>
               <span className="font-semibold text-sm" style={{ color: assetClassColor(tableData.asset_class) }}>
                 {tableData.category_name} {isSectoral && selectedSector !== ALL_SECTORS && ` — ${selectedSector}`}
               </span>
               <span className="text-xs" style={{ color: 'var(--text-low)' }}>
-                {filteredFunds.length} funds · Data as of {tableData.as_of}
+                {visibleFunds.length} funds · Data as of {tableData.as_of}
+                {sort.key && ' · sorted'}
               </span>
             </div>
             <table className="data-table">
               <thead>
                 <tr>
                   <th style={{ width: 45, textAlign: 'center' }}>Select</th>
-                  <th className="sticky-col text-left" style={{ minWidth: 260 }}>Fund Name</th>
-                  <th style={{ minWidth: 100 }}>AMC</th>
-                  {sortedPeriodKeys.map(pk => (
-                    <th key={pk} className="ret-cell">{formatPeriodHeader(pk)}</th>
-                  ))}
+                  {/* Spread first, className last: the sticky column has its own
+                      class that the spread would otherwise overwrite. */}
+                  <th {...sort.headerProps('fund')}
+                      className={`sticky-col text-left ${sort.headerProps('fund').className}`}
+                      style={{ minWidth: 260 }}>
+                    Fund Name<span className="sort-caret">{sort.caret('fund')}</span>
+                  </th>
+                  <th {...sort.headerProps('amc')} style={{ minWidth: 100 }}>
+                    AMC<span className="sort-caret">{sort.caret('amc')}</span>
+                  </th>
+                  {sortedPeriodKeys.map(pk => {
+                    const { main, sub } = periodLabelParts(pk)
+                    const hp = sort.headerProps(pk)
+                    return (
+                      <th key={pk} {...hp} className={`ret-cell ${hp.className}`}>
+                        <div>{main}<span className="sort-caret">{sort.caret(pk)}</span></div>
+                        {sub && <div className="period-sub">{sub}</div>}
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody key={`${activeSlug}-${view}`} className="rows-enter">
-                {filteredFunds.map(fund => (
+                {visibleFunds.map(fund => (
                   <tr key={fund.scheme_code} id={`fund-row-${fund.scheme_code}`}
                       style={fund.scheme_code === highlight
                         ? { boxShadow: 'inset 0 0 0 2px var(--accent-a)' }
@@ -533,7 +623,7 @@ export default function FundScreener({ selectedFunds, onToggleFund,
                     ))}
                   </tr>
                 ))}
-                {filteredFunds.length === 0 && (
+                {visibleFunds.length === 0 && (
                   <tr>
                     <td colSpan={3 + sortedPeriodKeys.length} className="text-center p-8" style={{ color: 'var(--text-mid)' }}>
                       No funds found matching this category filter.
@@ -575,7 +665,33 @@ export default function FundScreener({ selectedFunds, onToggleFund,
           </div>
         ) : (
           <div className="p-8 text-center" style={{ color: 'var(--text-mid)' }}>
-            No data available for this category yet. Run the backfill first.
+            {/* A category with no funds has no file at all, because the engine
+                only writes one for categories it found schemes in. Absent is the
+                answer here, not a fault.
+
+                400 AS WELL AS 404, and that is not defensive padding: Supabase
+                Storage answers a missing object in a PRIVATE bucket with 400.
+                Measured — the SIF debt category returns 400 while the equity one
+                returns 200. scripts/supabase_store treats the same pair as
+                "absent" for exactly this reason. */}
+            {error && /\b(404|400)\b/.test(error) ? (
+              <>
+                <div style={{ color: 'var(--text-hi)', marginBottom: 4, fontWeight: 600 }}>
+                  No data
+                </div>
+                <div className="text-xs">
+                  No fund has been launched under this category, so there is nothing
+                  to show.
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ color: 'var(--loss)', marginBottom: 4 }}>
+                  Could not load this category.
+                </div>
+                <div className="text-xs">{error ?? 'no data returned'}</div>
+              </>
+            )}
           </div>
         )}
       </div>

@@ -3,6 +3,11 @@
 import { useState, useMemo, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useMeta, useQuartiles } from '../hooks/useData'
+import CategoryPicker from '../components/CategoryPicker'
+import { periodLabelParts } from '../utils/periods'
+import DownloadButton from '../components/DownloadButton'
+import type { SheetSpec } from '../utils/xlsx'
+import { categoryColor } from '../config/categoryColors'
 import { quartilePillClass, fmtPct, shortFundName } from '../utils/format'
 import { ALL_SECTORS, SECTORAL_THEMATIC_SLUG, sectorOf, sectorOptions } from '../utils/sectors'
 
@@ -21,37 +26,6 @@ const Q_BG: Record<number, string> = {
 }
 
 /* ─── Helpers ────────────────────────────────────────────── */
-
-const MONTH_FULL: Record<string, string> = {
-  Jan: 'January', Feb: 'February', Mar: 'March',     Apr: 'April',
-  May: 'May',     Jun: 'June',     Jul: 'July',      Aug: 'August',
-  Sep: 'September', Oct: 'October', Nov: 'November', Dec: 'December',
-}
-
-/**
- * Column header for a period, split across two lines.
- *   quarterly  "Q1-2026"  -> { main: "Q1-2026",  sub: "(Jan - Mar 26)" }
- *   monthly    "Jun-2026" -> { main: "June",     sub: "2026" }
- *   annual     "2024"     -> { main: "2024" }
- * Monthly labels previously fell through unformatted, printing a bare
- * "Jun-2026" beside the quarterly column's much richer heading.
- */
-function parsePeriodLabel(label: string): { main: string; sub?: string } {
-  const qMatch = label.match(/^Q(\d)-(\d{4})$/)
-  if (qMatch) {
-    const q = parseInt(qMatch[1])
-    const yr = qMatch[2].slice(2)
-    const months = ['Jan - Mar', 'Apr - June', 'July - Sept', 'Oct - Dec'][q - 1] ?? ''
-    return { main: label, sub: `(${months} ${yr})` }
-  }
-
-  const mMatch = label.match(/^([A-Z][a-z]{2})-(\d{4})$/)
-  if (mMatch) {
-    return { main: MONTH_FULL[mMatch[1]] ?? mMatch[1], sub: mMatch[2] }
-  }
-
-  return { main: label }
-}
 
 /* ─── Small Components ───────────────────────────────────── */
 
@@ -177,7 +151,7 @@ export default function QuartileRanking() {
 
   const eligibleCats = (meta?.categories ?? []).filter(c => EQUITY_HYBRID_CLASSES.includes(c.asset_class))
   const activeSlug = slug || (eligibleCats[0]?.slug ?? '')
-  const { data, loading } = useQuartiles(activeSlug, mode)
+  const { data, loading, error } = useQuartiles(activeSlug, mode)
 
   const mainTabs  = eligibleCats.filter(c => MAIN_TAB_NAMES.includes(c.category_name))
   const otherCats = eligibleCats.filter(c => !MAIN_TAB_NAMES.includes(c.category_name))
@@ -216,6 +190,65 @@ export default function QuartileRanking() {
   }, [data, isSectoral, activeSector])
 
   const reversedPeriodLabels = data ? [...data.period_labels].reverse() : []
+
+  /**
+   * The quartile grid as a workbook.
+   *
+   * Two cells per period — the quartile and the return that produced it — because
+   * a grid of bare 1s and 4s is unusable away from the colour coding on screen.
+   * Columns run latest first, matching the table.
+   */
+  const buildExport = (): SheetSpec | null => {
+    if (!data) return null
+    const order = data.period_labels.map((_l, i) => i).reverse()
+    const cols: SheetSpec['columns'] = [
+      { key: 'fund', label: 'Fund Name', type: 'text', width: 46 },
+      // isSectoral is how the rest of this screen decides the same thing —
+      // derived from the slug, not from a payload field that the type does not
+      // declare. One source for one fact.
+      ...(isSectoral
+        ? [{ key: 'sector', label: 'Sector', type: 'text' as const, width: 22 }] : []),
+    ]
+    for (const i of order) {
+      const { main, sub } = periodLabelParts(data.period_labels[i])
+      const head = sub ? `${main} ${sub}` : main
+      cols.push({ key: `q${i}`, label: `${head} - Quartile`, type: 'int', width: 10 })
+      cols.push({ key: `r${i}`, label: `${head} - Return`, type: 'percent' })
+    }
+    // Exports the funds the sector filter has left visible, not the raw payload.
+    const rows: SheetSpec['rows'] = funds.map(f => {
+      const row: SheetSpec['rows'][number] = { fund: f.scheme_name }
+      if (isSectoral) row.sector = f.sector ?? ''
+      for (const i of order) {
+        row[`q${i}`] = f.quartiles[i] ?? null
+        // `returns` is optional on the row — older payloads carry only the
+        // quartiles, and an absent array must read as an empty cell.
+        row[`r${i}`] = f.returns?.[i] ?? null
+      }
+      return row
+    })
+    return {
+      sheet: `Quartiles ${mode}`,
+      title: `Quartile Ranking - ${data.category_name} (${mode})`,
+      meta: [
+        ['Category', data.category_name],
+        ['Mode', mode],
+        ['Data as of', data.as_of],
+        ['Funds', String(funds.length)],
+        ...(isSectoral && activeSector !== ALL_SECTORS
+          ? [['Sector filter', activeSector] as [string, string]] : []),
+        ['Ranked within', isSectoral
+          ? 'Each sector separately' : 'The whole category'],
+        ['Quartile', 'Q1 is the best-performing quarter of the peer group, Q4 the '
+                   + 'worst. An empty cell means the fund was not ranked that '
+                   + 'period, usually because it had not launched.'],
+        ['Column order', 'Latest to oldest, left to right'],
+      ],
+      columns: cols,
+      rows,
+      fileName: `Quartiles - ${data.category_name} - ${mode} - ${data.as_of}`,
+    }
+  }
 
   // Fund name lookup
   const fundNameMap = useMemo(
@@ -474,30 +507,50 @@ export default function QuartileRanking() {
       {/* ── Controls ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div className="flex gap-2 flex-wrap items-center">
-          <div className="tab-bar">
-            {mainTabs.map(c => (
-              <button key={c.slug} onClick={() => setSlug(c.slug)}
-                className={`tab-btn${activeSlug === c.slug ? ' active accent' : ''}`}>
-                {c.category_name}
-              </button>
-            ))}
-          </div>
-          {otherCats.length > 0 && (
-            <select
-              value={mainTabs.some(c => c.slug === activeSlug) ? '' : activeSlug}
-              onChange={e => { if (e.target.value) setSlug(e.target.value) }}
-              className="px-3 py-1.5 rounded-lg text-sm"
-              style={{ background: 'var(--bg-raised)', border: '1px solid var(--line)', color: 'var(--text-hi)', outline: 'none' }}
-            >
-              <option value="" disabled>-- Other Categories --</option>
-              {otherCats.map(c => <option key={c.slug} value={c.slug}>{c.category_name}</option>)}
-            </select>
+          {/* A desk whose categories match none of the mutual fund main-tab names
+              would otherwise put every one of them in the dropdown. Show them all
+              instead, stacked and each in its own colour. */}
+          {mainTabs.length === 0 ? (
+            <CategoryPicker cats={eligibleCats} active={activeSlug}
+                            onChange={setSlug} vertical />
+          ) : (
+            <>
+              <div className="tab-bar">
+                {mainTabs.map(c => {
+                  const colour = categoryColor(c.slug, c.asset_class)
+                  const on = activeSlug === c.slug
+                  return (
+                    <button key={c.slug} onClick={() => setSlug(c.slug)}
+                      className={`tab-btn${on ? ' active' : ''}`}
+                      style={on ? { color: colour, background: `${colour}1f` } : undefined}>
+                      {c.category_name}
+                    </button>
+                  )
+                })}
+              </div>
+              {otherCats.length > 0 && (
+                <select
+                  value={mainTabs.some(c => c.slug === activeSlug) ? '' : activeSlug}
+                  onChange={e => { if (e.target.value) setSlug(e.target.value) }}
+                  className="px-3 py-1.5 rounded-lg text-sm"
+                  style={{ background: 'var(--bg-raised)',
+                           border: `1px solid ${mainTabs.some(c => c.slug === activeSlug)
+                             ? 'var(--line)' : categoryColor(activeSlug)}`,
+                           color: 'var(--text-hi)', outline: 'none' }}
+                >
+                  <option value="" disabled>-- Other Categories --</option>
+                  {otherCats.map(c => <option key={c.slug} value={c.slug}>{c.category_name}</option>)}
+                </select>
+              )}
+            </>
           )}
         </div>
-        <div className="tab-bar shrink-0">
+        <div className="tab-bar shrink-0 flex items-center gap-2">
           <button onClick={() => setMode('monthly')}   className={`tab-btn${mode === 'monthly'   ? ' active accent' : ''}`}>Monthly</button>
           <button onClick={() => setMode('quarterly')} className={`tab-btn${mode === 'quarterly' ? ' active accent' : ''}`}>Quarterly</button>
           <button onClick={() => setMode('annual')}    className={`tab-btn${mode === 'annual'    ? ' active accent' : ''}`}>Annual</button>
+          <DownloadButton build={buildExport}
+                          disabledHint="No ranked funds in this category yet" />
         </div>
       </div>
 
@@ -549,13 +602,13 @@ export default function QuartileRanking() {
         {loading ? (
           <div className="p-6 space-y-2">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-8 w-full" />)}</div>
         ) : data ? (
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
                   <th className="sticky-col text-left" style={{ minWidth: 240 }}>Fund</th>
                   {reversedPeriodLabels.map(p => {
-                    const { main, sub } = parsePeriodLabel(p)
+                    const { main, sub } = periodLabelParts(p)
                     return (
                       <th key={p} style={{ minWidth: 150, textAlign: 'center', fontSize: 11 }}>
                         <div style={{ lineHeight: 1.35 }}>
@@ -611,7 +664,39 @@ export default function QuartileRanking() {
             </table>
           </div>
         ) : (
-          <div className="p-8 text-center" style={{ color: 'var(--text-mid)' }}>No quartile data yet. Complete the backfill first.</div>
+          <div className="p-8 text-center" style={{ color: 'var(--text-mid)' }}>
+            {/* An absent file means the category has no funds to rank -- the
+                engine only writes one where it found schemes. Supabase answers a
+                missing object with 400 in a private bucket and 404 in a public
+                one, so both count as absent. */}
+            {error && /\b(404|400)\b/.test(error) ? (
+              <>
+                <div style={{ color: 'var(--text-hi)', marginBottom: 4 }}>
+                  No funds in this category yet.
+                </div>
+                <div className="text-xs">
+                  Nothing to rank until a scheme is launched under this strategy.
+                </div>
+              </>
+            ) : error ? (
+              <>
+                <div style={{ color: 'var(--loss)', marginBottom: 4 }}>
+                  Could not load the quartile grid.
+                </div>
+                <div className="text-xs">{error}</div>
+              </>
+            ) : (
+              <>
+                <div style={{ color: 'var(--text-hi)', marginBottom: 4 }}>
+                  Not enough history to rank yet.
+                </div>
+                <div className="text-xs">
+                  A fund needs {minPeriods} completed {periodWord}s before it can be
+                  placed in a quartile.
+                </div>
+              </>
+            )}
+          </div>
         )}
       </div>
 
@@ -1085,7 +1170,7 @@ export default function QuartileRanking() {
                       {data.period_labels.map((label, i) => {
                         const pct = insights.persistenceTrend[i]
                         if (pct === null) return null
-                        const formattedLabel = parsePeriodLabel(label)
+                        const formattedLabel = periodLabelParts(label)
                         const barColor = pct >= 65 ? '#34D399' : pct >= 45 ? '#F59E0B' : '#F87171'
                         return (
                           <div key={label} className="flex items-center gap-2">

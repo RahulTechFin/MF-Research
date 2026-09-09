@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import { useGlance } from '../hooks/useData'
 import { fmtPct, heatmapClass, retColor, assetClassColor } from '../utils/format'
+import { orderPeriods, periodLabelParts } from '../utils/periods'
+import DownloadButton from '../components/DownloadButton'
+import type { SheetSpec } from '../utils/xlsx'
 import type { ViewType } from '../types'
 
 const VIEWS: { key: ViewType; label: string }[] = [
@@ -27,6 +30,76 @@ export default function CategorySnapshot({ selectedCategories, onToggleCategory 
   const [expanded, setExpanded] = useState<string | null>(null)
   const { data, loading } = useGlance(view)
 
+  // Latest first, and spelt: "Jul 2026" rather than "2026-07". Computed once and
+  // used by the header and all three kinds of body row, so a column and its
+  // heading cannot fall out of step.
+  const periods = orderPeriods(data?.rows[0]?.periods ?? [], view)
+
+  /**
+   * The snapshot as a workbook: one row per category, grouped by asset class,
+   * with the theme breakdown and the benchmark row included when they are open
+   * on screen. What is exported is what is displayed.
+   */
+  const buildExport = (): SheetSpec | null => {
+    if (!data) return null
+    const rows: SheetSpec['rows'] = []
+    for (const ac of ASSET_ORDER) {
+      const inClass = data.rows.filter(r => r.asset_class === ac)
+      if (!inClass.length) continue
+      rows.push({ group: ac.toUpperCase() })
+      for (const row of inClass) {
+        rows.push({
+          name: row.category_name,
+          funds: row.fund_count,
+          ...Object.fromEntries(periods.map(pk => [pk, row.averages[pk] ?? null])),
+        })
+        if (expanded === row.slug) {
+          for (const sec of row.sectors ?? []) {
+            rows.push({
+              name: `    ${sec.sector}`,
+              funds: sec.fund_count,
+              ...Object.fromEntries(periods.map(pk => [pk, sec.averages[pk] ?? null])),
+            })
+          }
+        }
+        if (showBenchmark && row.benchmark_id) {
+          rows.push({
+            name: '    Benchmark',
+            funds: null,
+            ...Object.fromEntries(periods.map(pk => [pk, row.benchmark[pk] ?? null])),
+          })
+        }
+      }
+    }
+    const viewLabel = VIEWS.find(v => v.key === view)?.label ?? view
+    return {
+      sheet: `Category Snapshot ${viewLabel}`,
+      title: `Category Snapshot - ${viewLabel}`,
+      meta: [
+        ['View', viewLabel],
+        ['Data as of', data.as_of],
+        ['Categories', String(data.rows.length)],
+        ['Figures', 'Equal-weighted average of every eligible fund in the '
+                  + 'category. Stored as ratios and shown as percentages; an '
+                  + 'empty cell means no fund had enough history for that period.'],
+        ['Column order', view === 'trailing' ? 'Shortest to longest period'
+                                             : 'Latest to oldest, left to right'],
+        ...(showBenchmark ? [['Benchmark rows', 'Included'] as [string, string]] : []),
+      ],
+      columns: [
+        { key: 'name', label: 'Category', type: 'text', width: 44 },
+        { key: 'funds', label: 'Funds', type: 'int', width: 9 },
+        ...periods.map(pk => {
+          const { main, sub } = periodLabelParts(pk)
+          return { key: pk, label: sub ? `${main} ${sub}` : main,
+                   type: 'percent' as const }
+        }),
+      ],
+      rows,
+      fileName: `Category Snapshot - ${viewLabel} - ${data.as_of}`,
+    }
+  }
+
   const grouped = data
     ? ASSET_ORDER.map(ac => ({
         ac,
@@ -48,11 +121,14 @@ export default function CategorySnapshot({ selectedCategories, onToggleCategory 
             </button>
           ))}
         </div>
+        <div className="flex items-center gap-2 flex-wrap">
         <button
           onClick={() => setShowBenchmark(!showBenchmark)}
           className={`amc-toggle${showBenchmark ? ' active' : ''}`}>
           Compare to Benchmark {showBenchmark ? '▴' : '▾'}
         </button>
+        <DownloadButton build={buildExport} />
+        </div>
       </div>
 
       {/* Table */}
@@ -64,16 +140,22 @@ export default function CategorySnapshot({ selectedCategories, onToggleCategory 
             <div className="skeleton w-3/4 h-6" />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
                   <th style={{ width: 45, textAlign: 'center' }}>Select</th>
                   <th className="sticky-col text-left" style={{ minWidth: 220 }}>Category</th>
                   <th style={{ minWidth: 60 }}>Funds</th>
-                  {(data?.rows[0]?.periods ?? []).map(p => (
-                    <th key={String(p)} className="ret-cell">{String(p)}</th>
-                  ))}
+                  {periods.map(pk => {
+                    const { main, sub } = periodLabelParts(pk)
+                    return (
+                      <th key={pk} className="ret-cell">
+                        <div>{main}</div>
+                        {sub && <div className="period-sub">{sub}</div>}
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody key={view} className="rows-enter">
@@ -144,8 +226,7 @@ export default function CategorySnapshot({ selectedCategories, onToggleCategory 
                           <td className="text-center" style={{ color: 'var(--text-mid)', fontSize: '0.75rem' }}>
                             {row.fund_count}
                           </td>
-                          {(data?.rows[0]?.periods ?? []).map(p => {
-                            const pk = String(p)
+                          {periods.map(pk => {
                             const v = row.averages[pk]
                             return (
                               <td key={pk} className={`ret-cell ${heatmapClass(v)} ${retColor(v)}`}>
@@ -174,8 +255,7 @@ export default function CategorySnapshot({ selectedCategories, onToggleCategory 
                               </span>
                             </td>
                             <td />
-                            {(data?.rows[0]?.periods ?? []).map(p => {
-                              const pk = String(p)
+                            {periods.map(pk => {
                               const v = s.averages[pk]
                               const parent = row.averages[pk]
                               const spread = v != null && parent != null ? v - parent : null
@@ -204,8 +284,7 @@ export default function CategorySnapshot({ selectedCategories, onToggleCategory 
                               ↳ Benchmark
                             </td>
                             <td />
-                            {(data?.rows[0]?.periods ?? []).map(p => {
-                              const pk = String(p)
+                            {periods.map(pk => {
                               const bv  = row.benchmark[pk]
                               const av  = row.averages[pk]
                               const spread = bv != null && av != null ? av - bv : null
@@ -235,6 +314,7 @@ export default function CategorySnapshot({ selectedCategories, onToggleCategory 
       {data && (
         <div className="mt-2 text-right text-xs" style={{ color: 'var(--text-low)' }}>
           Data as of {data.as_of} · Returns are category averages of all eligible funds
+          {view !== 'trailing' && ' · columns run latest → oldest'}
         </div>
       )}
     </section>

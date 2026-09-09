@@ -167,9 +167,13 @@ export interface RiskFundRow {
   alpha: number | null
   max_drawdown: number | null
   recovery_days: number | null
-  trough_date: string | null
-  peak_date: string | null
-  recovery_date: string | null
+  // OPTIONAL, not just nullable. build_json omits these three entirely when a
+  // fund has no drawdown to describe -- which is every fund on a desk too young
+  // for the 3-year window risk_metrics needs. RiskLab already treats them as
+  // falsy; the type now says so too.
+  trough_date?: string | null
+  peak_date?: string | null
+  recovery_date?: string | null
   upside_capture: number | null
   downside_capture: number | null
   composite_score: number | null

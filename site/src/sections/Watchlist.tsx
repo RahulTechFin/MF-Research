@@ -9,6 +9,8 @@
 // treating it as continuity would overstate the run.
 
 import { useState, useMemo, useEffect } from 'react'
+import DownloadButton from '../components/DownloadButton'
+import type { SheetSpec } from '../utils/xlsx'
 import { useJson } from '../hooks/useData'
 import { fmtPct, shortFundName } from '../utils/format'
 import { ALL_SECTORS, SECTORAL_THEMATIC_SLUG, sectorOf, sectorOptions } from '../utils/sectors'
@@ -214,6 +216,49 @@ export default function Watchlist() {
   const [minAmcFunds, setMinAmcFunds] = useState(1)
 
   const { data, loading, error } = useJson<WatchlistData>(`watchlist_${mode}.json`)
+
+  /**
+   * The signal list as a workbook. The quartile run that produced each call is
+   * exported alongside it — a bare "EXIT" with no evidence behind it is not
+   * something anyone should be forwarding.
+   */
+  const buildExport = (): SheetSpec | null => {
+    if (!data) return null
+    return {
+      sheet: `Fund Signals ${mode}`,
+      title: `Fund Signals - Exit & Entry Watch (${mode})`,
+      meta: [
+        ['Mode', mode],
+        ['Data as of', data.as_of],
+        ['Periods examined', `${data.period_labels.length} ${mode === 'annual' ? 'years'
+                              : mode === 'monthly' ? 'months' : 'quarters'}`],
+        ['Minimum history', `${data.min_history} ranked periods`],
+        ['Funds', String(data.funds.length)],
+        ['Quartile run', 'Oldest to newest, left to right within the cell. '
+                       + 'Q1 is the best quarter of the peer group, Q4 the worst.'],
+      ],
+      columns: [
+        { key: 'fund', label: 'Fund Name', type: 'text', width: 46 },
+        { key: 'category', label: 'Category', type: 'text', width: 26 },
+        { key: 'amc', label: 'AMC', type: 'text', width: 22 },
+        { key: 'signal', label: 'Signal', type: 'text', width: 15 },
+        { key: 'exit_streak', label: 'Bottom-half streak', type: 'int', width: 12 },
+        { key: 'entry_streak', label: 'Top-half streak', type: 'int', width: 12 },
+        { key: 'run', label: 'Quartile run (oldest to newest)', type: 'text', width: 34 },
+      ],
+      rows: data.funds.map(f => ({
+        fund: f.scheme_name,
+        category: f.category_name,
+        amc: f.amc_name,
+        signal: f.exit_streak >= data.min_history ? 'EXIT'
+              : f.entry_streak >= data.min_history ? 'KEEP' : 'REVIEW',
+        exit_streak: f.exit_streak,
+        entry_streak: f.entry_streak,
+        run: f.quartiles.map((q: number | null) => q == null ? '-' : `Q${q}`).join(' '),
+      })),
+      fileName: `Fund Signals - ${mode} - ${data.as_of}`,
+    }
+  }
   const periodWord = mode === 'monthly' ? 'month' : mode === 'annual' ? 'year' : 'quarter'
 
   /* ── Sectoral/Thematic sub-category ─────────────────────────────────────
@@ -330,6 +375,8 @@ export default function Watchlist() {
     <section id="watchlist" className="px-6 py-6 max-w-screen-2xl mx-auto">
       <div className="section-header">
         <span>Fund Signals — Exit &amp; Entry Watch</span>
+        <DownloadButton build={buildExport}
+                        disabledHint="No signals for this selection yet" />
         <button
           onClick={() => setAmcOpen(true)}
           className="tab-btn font-semibold ml-auto"
