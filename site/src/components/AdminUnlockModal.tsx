@@ -6,6 +6,9 @@
 // simply appear — no navigation, no reload.
 
 import { useEffect, useRef, useState } from 'react'
+import {
+  ADMIN_MAINTENANCE, ADMIN_MAINTENANCE_BODY, ADMIN_MAINTENANCE_TITLE,
+} from '../config/maintenance'
 
 interface Props {
   open: boolean
@@ -26,6 +29,9 @@ export default function AdminUnlockModal({ open, onClose, onUnlock }: Props) {
       setPassword('')
       setError(false)
       setChecking(false)
+      // Nothing to focus while the failure card is showing, and stealing focus
+      // to an input that is not there throws.
+      if (ADMIN_MAINTENANCE) return
       // Wait for the entry transition before focusing, or the page jumps.
       const t = setTimeout(() => inputRef.current?.focus(), 80)
       return () => clearTimeout(t)
@@ -73,6 +79,20 @@ export default function AdminUnlockModal({ open, onClose, onUnlock }: Props) {
           <img src="/logo.jpg" alt="" className="admin-modal-logo" />
         </div>
 
+        {/* TEMPORARY — see config/maintenance.ts. Set ADMIN_MAINTENANCE to
+            false and the password form below returns exactly as it was; nothing
+            about it has been changed or removed. */}
+        {ADMIN_MAINTENANCE ? (
+          <>
+            <div className="admin-modal-title">{ADMIN_MAINTENANCE_TITLE}</div>
+            <div className="admin-modal-sub">{ADMIN_MAINTENANCE_BODY}</div>
+            <button type="button" className="admin-modal-submit" onClick={onClose}
+                    style={{ marginTop: 18 }}>
+              Close
+            </button>
+          </>
+        ) : (
+        <>
         <div className="admin-modal-title">Administrator Access</div>
         <div className="admin-modal-sub">
           Enter the password to unlock the full research suite.
@@ -100,6 +120,8 @@ export default function AdminUnlockModal({ open, onClose, onUnlock }: Props) {
             {checking ? 'Verifying…' : 'Unlock'}
           </button>
         </form>
+        </>
+        )}
 
         <div className="admin-modal-foot">🔒 Internal research use only</div>
       </div>
