@@ -28,6 +28,7 @@ import collections
 import json
 import logging
 import os
+import re
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -156,7 +157,10 @@ def refresh_from_amfi(existing: dict | None) -> dict:
     if not text:
         raise SystemExit("Could not download the AMFI NAV file — catalogue not refreshed.")
 
-    records = amfi.parse_amfi_text(text)
+    # Collects the codes rejected on share-class grounds, for the prune below.
+    rejected_share_class: set[str] = set()
+    records = amfi.parse_amfi_text(
+        text, rejected_share_class=rejected_share_class)
     log.info("AMFI listed %d qualifying scheme records today", len(records))
     if len(records) < 2000:
         raise SystemExit(
@@ -239,6 +243,79 @@ def refresh_from_amfi(existing: dict | None) -> dict:
         for k, v in dropped.most_common():
             log.warning("   %-26s %d", k, v)
         for c in bogus:
+            del merged[c]
+
+    # ── correction: share classes AMFI lists today but that no longer qualify ─
+    #
+    # The merge above is additive, and deliberately so: NAVOpen.txt is a snapshot,
+    # and replacing the catalogue with it would delete ~900 funds that are quiet
+    # today but still have history the dashboard shows. The cost of that safety
+    # is that a row admitted by an older, looser filter can never leave.
+    #
+    # That is how three extra "Nippon India Growth Mid Cap Fund" rows survived.
+    # AMFI publishes four share classes under that one name — Growth, IDCW, Bonus
+    # and Institutional-IDCW — and the filter used to accept any row whose NAME
+    # contained "growth", which that fund's title does. One fund was counted four
+    # times in the Mid Cap average and ranked four times in the quartiles.
+    #
+    # A ROW IS ONLY PRUNED WHERE AMFI ITSELF SAID WHAT SHARE CLASS IT IS.
+    # Three earlier attempts got this wrong, each in its own way, and the shape
+    # of the mistake is worth keeping:
+    #
+    #   1. Comparing the catalogue against the codes parse_amfi_text RETURNED
+    #      deleted 31 good funds. The parser also skips unmapped sections,
+    #      closed-end sections, missing NAVs and unparseable dates; "the parser
+    #      skipped it" is not "it is a duplicate share class".
+    #   2. Re-running is_regular_growth over the raw file rejected 377, because
+    #      ETFs are exempt from that test and only the parser knows which
+    #      section header a row sat under.
+    #   3. Having the parser report its share-class rejections STILL deleted 32
+    #      good funds, because AMFI leaves Plan and Option blank for many
+    #      schemes and publishes several such rows under one identical name.
+    #      "Motilal Oswal Midcap Fund" ships four indistinguishable rows today;
+    #      silent_growth_codes rightly declines to guess and skips all four, yet
+    #      127039 is the real Regular Growth row, catalogued years ago under the
+    #      fuller name AMFI used to publish and has since dropped.
+    #
+    # So the parser records a rejection only when the row states its class — an
+    # option named in the name or the Option column, or a legacy plan marker.
+    # Silence is not a verdict, and neither is absence: a code missing from
+    # today's file is left alone, which is the case the additive rule exists to
+    # protect. Of 2,150 entries this prunes 27, every one of which AMFI labels
+    # Institutional, Super Institutional, Retail, Discontinued, Unclaimed, IDCW
+    # or Bonus in its own Option column, and none of which is the last surviving
+    # row of its fund.
+    superseded = [c for c in merged if c in rejected_share_class]
+    # A filter bug must not be able to empty the catalogue.
+    MAX_SUPERSEDED_FRACTION = 0.10
+    if superseded and len(superseded) > len(merged) * MAX_SUPERSEDED_FRACTION:
+        log.error("%d of %d catalogue entries were rejected on share-class "
+                  "grounds (>%.0f%%). That is a filter fault, not a real change "
+                  "— refusing to prune.",
+                  len(superseded), len(merged), MAX_SUPERSEDED_FRACTION * 100)
+    elif superseded:
+        by_cat = collections.Counter(
+            merged[c].get("category_name") or "(uncategorised)" for c in superseded
+        )
+        log.warning("Dropping %d share class(es) AMFI still lists but that are "
+                    "not Regular-Growth (the qualifier is in the Plan/Option "
+                    "column, not the name):", len(superseded))
+        for k, v in by_cat.most_common(10):
+            log.warning("   %-26s %d", k, v)
+        for c in sorted(superseded)[:12]:
+            log.warning("     %s  %s", c, merged[c].get("scheme_name"))
+
+        report = os.path.join(os.path.dirname(os.path.abspath(CATALOGUE_PATH)),
+                              "removed_share_classes.json")
+        with open(report, "w", encoding="utf-8") as fh:
+            json.dump(
+                [{k: merged[c].get(k) for k in
+                  ("scheme_code", "scheme_name", "category_name", "isin")}
+                 for c in sorted(superseded)],
+                fh, indent=2, ensure_ascii=False,
+            )
+        log.warning("   audit trail: %s", report)
+        for c in superseded:
             del merged[c]
 
     # ── correction: legacy share classes ────────────────────────────────────

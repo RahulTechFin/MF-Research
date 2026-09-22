@@ -30,7 +30,7 @@ log = logging.getLogger("supabase_store")
 _BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _KEYS = ("SUPABASE_URL", "SUPABASE_SERVICE_KEY", "SUPABASE_BUCKET",
-         "SUPABASE_DATA_BUCKET")
+         "SUPABASE_DATA_BUCKET", "SUPABASE_SIF_BUCKET")
 
 
 def _load_env() -> dict[str, str]:
@@ -67,6 +67,13 @@ KEY = _ENV.get("SUPABASE_SERVICE_KEY") or ""
 BUCKET = _ENV.get("SUPABASE_BUCKET") or "Indicies Data"
 INDEX_BUCKET = BUCKET
 DATA_BUCKET = _ENV.get("SUPABASE_DATA_BUCKET") or "MF Data"
+
+# The SIF desk, and the one bucket here that is PRIVATE. The other two are
+# public and are proxied by netlify.toml with no credential at all; this one
+# answers nothing without the key, so whatever ends up serving it to the browser
+# has to hold that key server-side. Writing to it from the pipeline works the
+# same as the others, because the service key is already in play there.
+SIF_BUCKET = _ENV.get("SUPABASE_SIF_BUCKET") or "SIF Data"
 
 
 def enabled() -> bool:

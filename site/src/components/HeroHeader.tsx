@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { fmtDate } from '../utils/format'
 import { visibleTabs, CAN_UNLOCK } from '../config/profile'
 import { ADMIN_CONFIGURED } from '../hooks/useAdmin'
+import { productById } from '../config/products'
+import type { ProductId } from '../config/products'
 import AdminUnlockModal from './AdminUnlockModal'
 
 // The build must both contain the admin sections and carry a valid password
@@ -12,6 +14,8 @@ const UNLOCKABLE = CAN_UNLOCK && ADMIN_CONFIGURED
 
 interface Props {
   asOf: string | null
+  /** Which research desk is open — it names the header and picks the tabs. */
+  product: ProductId
   activeTab: string
   onChangeTab: (tab: string) => void
   theme: 'light' | 'dark'
@@ -22,16 +26,21 @@ interface Props {
 }
 
 export default function HeroHeader({
-  asOf, activeTab, onChangeTab, theme, onChangeTheme,
+  asOf, product, activeTab, onChangeTab, theme, onChangeTheme,
   isAdmin, onUnlock, onLock,
 }: Props) {
-  const tabs = visibleTabs(isAdmin)
+  const desk = productById(product)
+  const tabs = visibleTabs(isAdmin, product)
 
   // The dialog owns the password field, validation and error state.
   const [showPrompt, setShowPrompt] = useState(false)
 
   return (
-    <header className="hero-gradient fixed top-0 left-0 right-0 z-50 border-b" style={{ borderColor: 'var(--line)' }}>
+    <header
+      id="app-header"
+      className="hero-gradient fixed top-0 left-0 right-0 z-50 border-b"
+      style={{ borderColor: 'var(--line)' }}
+    >
       {/* Top row: Logo + Title + Controls */}
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-2">
 
@@ -61,7 +70,7 @@ export default function HeroHeader({
               className="font-display font-bold tracking-wide text-white text-xs sm:text-sm"
               style={{ letterSpacing: '0.03em' }}
             >
-              MF RESEARCH CENTER
+              {desk.headerTitle}
             </div>
             <div className="hidden md:block text-[9px] text-white/50" style={{ letterSpacing: '0.03em' }}>
               For Internal Research Use Only

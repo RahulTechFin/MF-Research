@@ -4,9 +4,11 @@ import { useMemo, useState, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useMeta, useRisk, useDrawdown } from '../hooks/useData'
 import CategoryPicker from '../components/CategoryPicker'
+import ComingFunds from '../components/ComingFunds'
 import { categoryColor } from '../config/categoryColors'
 import { useTableSort, sortRows } from '../hooks/useTableSort'
 import DownloadButton from '../components/DownloadButton'
+import { currentDesk } from '../config/products'
 import type { SheetSpec } from '../utils/xlsx'
 import { fmtPct } from '../utils/format'
 
@@ -114,10 +116,12 @@ export default function RiskLab() {
 
   const buildExport = (): SheetSpec | null => {
     if (!riskData) return null
+    const desk = currentDesk()
     return {
       sheet: 'Risk Lab',
       title: `Risk Lab - ${activeCatInfo?.category_name ?? activeSlug}`,
       meta: [
+        ['Desk', desk.name],
         ['Category', activeCatInfo?.category_name ?? activeSlug],
         ['Benchmark', activeCatInfo?.benchmark_name ?? '-'],
         ['Data as of', riskData.as_of],
@@ -149,7 +153,7 @@ export default function RiskLab() {
         downside_capture: f.downside_capture, composite_score: f.composite_score,
         fund_3y_cagr: f.fund_3y_cagr, bench_3y_cagr: f.bench_3y_cagr,
       })),
-      fileName: `Risk Lab - ${activeCatInfo?.category_name ?? activeSlug} - ${riskData.as_of}`,
+      fileName: `${desk.code} Risk Lab - ${activeCatInfo?.category_name ?? activeSlug} - ${riskData.as_of}`,
     }
   }
   const categoryBenchmarkName = activeCatInfo?.benchmark_name || 'Benchmark'
@@ -387,22 +391,9 @@ export default function RiskLab() {
           </div>
         ) : (
           <div className="p-8 text-center" style={{ color: 'var(--text-mid)' }}>
-            {error && /\b(404|400)\b/.test(error) ? (
-              <>
-                <div style={{ color: 'var(--text-hi)', marginBottom: 4 }}>
-                  No funds in this category yet.
-                </div>
-                <div className="text-xs">
-                  Nothing to measure until a scheme is launched under this strategy.
-                </div>
-              </>
-            ) : error ? (
-              <>
-                <div style={{ color: 'var(--loss)', marginBottom: 4 }}>
-                  Could not load the risk table.
-                </div>
-                <div className="text-xs">{error}</div>
-              </>
+            {error ? (
+              <ComingFunds error={error} subject="measure"
+                           failedLabel="the risk table" />
             ) : (
               <>
                 <div style={{ color: 'var(--text-hi)', marginBottom: 4 }}>

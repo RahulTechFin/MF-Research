@@ -25,15 +25,13 @@ interface Props {
   cats: PickerCategory[]
   active: string
   onChange: (slug: string) => void
-  /** Stack them instead of laying them out in a row. */
-  vertical?: boolean
 }
 
-export default function CategoryPicker({ cats, active, onChange, vertical }: Props) {
+export default function CategoryPicker({ cats, active, onChange }: Props) {
   if (cats.length === 0) return null
 
   return (
-    <div className={vertical ? 'cat-picker vertical' : 'cat-picker'}>
+    <div className="cat-picker">
       {cats.map(c => {
         const colour = categoryColor(c.slug, c.asset_class)
         const on = c.slug === active

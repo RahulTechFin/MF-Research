@@ -5,6 +5,7 @@ import { useGlance } from '../hooks/useData'
 import { fmtPct, heatmapClass, retColor, assetClassColor } from '../utils/format'
 import { orderPeriods, periodLabelParts } from '../utils/periods'
 import DownloadButton from '../components/DownloadButton'
+import { currentDesk } from '../config/products'
 import type { SheetSpec } from '../utils/xlsx'
 import type { ViewType } from '../types'
 
@@ -42,6 +43,7 @@ export default function CategorySnapshot({ selectedCategories, onToggleCategory 
    */
   const buildExport = (): SheetSpec | null => {
     if (!data) return null
+    const desk = currentDesk()
     const rows: SheetSpec['rows'] = []
     for (const ac of ASSET_ORDER) {
       const inClass = data.rows.filter(r => r.asset_class === ac)
@@ -76,6 +78,7 @@ export default function CategorySnapshot({ selectedCategories, onToggleCategory 
       sheet: `Category Snapshot ${viewLabel}`,
       title: `Category Snapshot - ${viewLabel}`,
       meta: [
+        ['Desk', desk.name],
         ['View', viewLabel],
         ['Data as of', data.as_of],
         ['Categories', String(data.rows.length)],
@@ -96,7 +99,7 @@ export default function CategorySnapshot({ selectedCategories, onToggleCategory 
         }),
       ],
       rows,
-      fileName: `Category Snapshot - ${viewLabel} - ${data.as_of}`,
+      fileName: `${desk.code} Category Snapshot - ${viewLabel} - ${data.as_of}`,
     }
   }
 

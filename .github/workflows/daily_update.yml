@@ -50,6 +50,10 @@ env:
   # so the bucket this job reads history from and writes results to is visible
   # here instead of being buried in a fallback.
   SUPABASE_DATA_BUCKET: ${{ secrets.SUPABASE_DATA_BUCKET }}
+  # The SIF desk. Unlike the two above this bucket is PRIVATE, so nothing can
+  # read it without the service key -- including, for now, the browser. Falls
+  # back to supabase_store's "SIF Data" default when the secret is unset.
+  SUPABASE_SIF_BUCKET: ${{ secrets.SUPABASE_SIF_BUCKET }}
 
 jobs:
   update:
@@ -97,8 +101,9 @@ jobs:
       # still produces correct data, but it takes far longer and then fails at
       # the publish step anyway. Better to stop here, before the expensive part.
       #
-      # The read is anonymous on purpose: it proves the bucket is publicly
-      # readable, which is what the dashboard depends on.
+      # Both reads below go through supabase_store, which sends the service
+      # key. That is what the pipeline itself uses, so this checks the path the
+      # run actually depends on.
       - name: Check the Supabase connection
         run: |
           test -n "$SUPABASE_URL"             || { echo "::error::SUPABASE_URL secret is not set"; exit 1; }
@@ -120,6 +125,16 @@ jobs:
               print("::error::cannot read meta.json from the bucket")
               sys.exit(1)
           print("Supabase read/write path OK")
+
+          # The SIF desk shares this job but not this bucket. Checked here so an
+          # unreachable SIF bucket is known before the pipeline runs rather than
+          # surfacing 10 minutes later; a warning, not an error, because SIF runs
+          # after the MF publish and must never block it.
+          sif = sb.list_objects("", bucket=sb.SIF_BUCKET)
+          print(f"bucket {sb.SIF_BUCKET!r}: {len(sif)} object(s)")
+          if not sif:
+              print("::warning::the SIF bucket is empty - the SIF desk will "
+                    "bootstrap its whole history from AMFI, which is one request")
           PY
         env:
           PYTHONIOENCODING: utf-8
@@ -154,6 +169,13 @@ jobs:
       # NOTE this makes the run depend on the bucket it publishes to: if
       # SUPABASE_* secrets are missing, every fund looks unpublished and the run
       # bootstraps all of them from mfapi, which still works but is slow.
+      #
+      # THE SIF DESK RUNS INSIDE THIS STEP TOO, as daily_run's step 5, after the
+      # mutual fund JSON is published. One job, one clock: both desks cap their
+      # newest NAV with the same previous_business_close call, so they cannot end
+      # up a day apart. SIF writes only to its own bucket and its failures are
+      # logged and stepped over, so it can never take down a good MF build. Pass
+      # --skip-sif to leave it alone.
       - name: Run daily pipeline (Supabase + AMFI -> engine -> JSON)
         run: |
           python scripts/daily_run.py \

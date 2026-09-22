@@ -13,11 +13,36 @@ import RollingP2P       from './sections/RollingP2P'
 import RiskLab          from './sections/RiskLab'
 import BlendStudio      from './sections/BlendStudio'
 import Watchlist        from './sections/Watchlist'
+import SifUniverse      from './sections/SifUniverse'
 import FundSearch       from './components/FundSearch'
+import ProductRail      from './components/ProductRail'
 import type { FundHit } from './components/FundSearch'
 import { useMeta }      from './hooks/useData'
-import { useAdmin }     from './hooks/useAdmin'
-import { isEnabled, BUILD_SECTIONS, DEFAULT_TAB } from './config/profile'
+import { useAdmin, isUnlockedNow } from './hooks/useAdmin'
+import { isEnabled, BUILD_SECTIONS, BUILD_HAS_PRODUCTS, defaultTab, tabAllowed } from './config/profile'
+import { productById, isProductId, tabStorageKey,
+         PRODUCT_STORAGE_KEY, DEFAULT_PRODUCT } from './config/products'
+import { setDataRoot } from './config/dataPaths'
+import type { ProductId } from './config/products'
+
+/** The desk to open on load. Non-admins are always on the default desk. */
+function initialProduct(): ProductId {
+  const saved = localStorage.getItem(PRODUCT_STORAGE_KEY)
+  if (!BUILD_HAS_PRODUCTS || !isUnlockedNow()) return DEFAULT_PRODUCT
+  return isProductId(saved) ? saved : DEFAULT_PRODUCT
+}
+
+/**
+ * The tab to open on a given desk. Each desk keeps its own last-viewed tab, so
+ * switching desks and coming back does not land you somewhere unrelated. The old
+ * single-desk key is read as a fallback so this deploy does not reset anyone.
+ */
+function initialTab(p: ProductId): string {
+  const saved = localStorage.getItem(tabStorageKey(p))
+    ?? (p === DEFAULT_PRODUCT ? localStorage.getItem('mfrc_active_tab') : null)
+  const admin = isUnlockedNow()
+  return saved && tabAllowed(saved, admin, p) ? saved : defaultTab(p, admin)
+}
 
 function StatusPage() {
   const { data: meta } = useMeta()
@@ -58,17 +83,37 @@ export default function App() {
   const { data: meta } = useMeta()
   const { isAdmin, unlock, lock } = useAdmin()
 
-  // Routing and Theme state persisted in LocalStorage.
-  const [activeTab, setActiveTab] = useState(() => {
-    const saved = localStorage.getItem('mfrc_active_tab')
-    return saved && isEnabled(saved, false) ? saved : DEFAULT_TAB
-  })
+  // Which research desk is open, and whether its rail is showing.
+  const [product, setProduct] = useState<ProductId>(initialProduct)
+  const desk = productById(product)
 
-  // Locking while sitting on an admin tab would leave the page blank, so send
-  // the viewer back to a section they are still allowed to see.
+  // DURING RENDER, not in an effect. Every section fetches inside its own effect,
+  // which runs after this, so the root is already correct by the time any request
+  // goes out. An effect here would fire after the children's and the first
+  // request of a desk switch would go to the previous desk's tree.
+  setDataRoot(desk.dataPrefix || 'data')
+
+  // Routing and Theme state persisted in LocalStorage.
+  const [activeTab, setActiveTab] = useState(() => initialTab(initialProduct()))
+
+  // One guard for both ways a tab can stop being valid: locking while sitting on
+  // an admin tab, and switching to a desk that does not have that tab at all.
+  // Either would leave the page blank, so fall back to something real.
   useEffect(() => {
-    if (!isEnabled(activeTab, isAdmin)) setActiveTab(DEFAULT_TAB)
-  }, [isAdmin, activeTab])
+    if (!tabAllowed(activeTab, isAdmin, product)) {
+      setActiveTab(defaultTab(product, isAdmin))
+    }
+  }, [isAdmin, product, activeTab])
+
+  // The desk switcher is admin-only for now, so locking has to close it too —
+  // otherwise a persisted 'sif' would survive the lock and show the scaffold.
+  useEffect(() => {
+    if (!isAdmin && product !== DEFAULT_PRODUCT) setProduct(DEFAULT_PRODUCT)
+  }, [isAdmin, product])
+
+  useEffect(() => {
+    localStorage.setItem(PRODUCT_STORAGE_KEY, product)
+  }, [product])
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (localStorage.getItem('mfrc_theme') as 'light' | 'dark') || 'dark')
   
   // Shared state for category comparison chart
@@ -86,6 +131,26 @@ export default function App() {
     // focus and scrolls to it.
     setActiveTab('screener')
     setFocusFund(hit)
+  }
+
+  /**
+   * Move to another desk.
+   *
+   * The selections are cleared on the way out. A scheme code or category slug
+   * belongs to one desk's universe and means nothing in the other, so carrying
+   * them across would chart funds that are not there — the same class of bug as
+   * a chart holding onto its old category after the category changed.
+   */
+  const handleChangeProduct = (next: ProductId) => {
+    if (next === product) return
+    setProduct(next)
+    const saved = localStorage.getItem(tabStorageKey(next))
+    setActiveTab(saved && tabAllowed(saved, isAdmin, next)
+      ? saved
+      : defaultTab(next, isAdmin))
+    setSelectedCategories([])
+    setSelectedFunds([])
+    setFocusFund(null)
   }
 
   const handleToggleCategory = (slug: string) => {
@@ -111,12 +176,12 @@ export default function App() {
   }
 
   useEffect(() => {
-    localStorage.setItem('mfrc_active_tab', activeTab)
+    localStorage.setItem(tabStorageKey(product), activeTab)
     // Switching tabs while scrolled halfway down used to drop you into the
     // middle of the next section. Jump — not smooth-scroll, which fights the
     // fade and takes longer than the transition itself.
     window.scrollTo({ top: 0, behavior: 'auto' })
-  }, [activeTab])
+  }, [activeTab, product])
 
   useEffect(() => {
     localStorage.setItem('mfrc_theme', theme)
@@ -135,11 +200,21 @@ export default function App() {
 
   return (
     <div className="min-h-screen transition-colors duration-150" style={{ background: 'var(--bg-base)', color: 'var(--text-hi)' }}>
-      {/* Hero header — fixed, always visible */}
-      <FundSearch onPick={handlePickFund} />
+      {/* Ctrl+S fund search. Scoped to the desk that has a fund index — on a desk
+          still awaiting its data it would search the wrong universe. */}
+      {desk.ready && <FundSearch onPick={handlePickFund} />}
 
+      {/* The desk switcher: a handle against the left edge, below the freeze row.
+          Admin-only for now. A team build drops the component and the SIF
+          scaffold outright -- verified, neither appears in dist-team's JS. */}
+      {BUILD_HAS_PRODUCTS && isAdmin && (
+        <ProductRail product={product} onChange={handleChangeProduct} />
+      )}
+
+      {/* Hero header — fixed, always visible */}
       <HeroHeader
         asOf={meta?.as_of ?? null}
+        product={product}
         activeTab={activeTab}
         onChangeTab={setActiveTab}
         theme={theme}
@@ -153,14 +228,23 @@ export default function App() {
           The key makes React remount on a tab change, which replays the
           .view-enter animation so switching sections fades in rather than
           snapping. */}
-      <main key={activeTab} className="pt-[120px] pb-12 view-enter">
+      <main key={`${product}:${activeTab}`} className="pt-[120px] pb-12 view-enter">
+        {desk.ready && (<>
         {activeTab === 'market-pulse' && (
           <MarketPulse />
         )}
 
         {BUILD_SECTIONS.category && isEnabled('category', isAdmin) && activeTab === 'category' && (
           <>
+            {/* Live Market first, so the day's context is read before anything
+                is compared against it. */}
             <MarketPulseBar />
+            {/* The SIF register sits between the two: it says WHICH schemes exist
+                and how their plan was established, which is what makes the
+                averages below it interpretable. Everything after it is the same
+                component the mutual fund desk uses, over the same engine — the
+                only difference is which tree dataBase() points at. */}
+            {BUILD_HAS_PRODUCTS && product === 'sif' && <SifUniverse />}
             <CategorySnapshot
               selectedCategories={selectedCategories}
               onToggleCategory={handleToggleCategory}
@@ -214,14 +298,15 @@ export default function App() {
         {BUILD_SECTIONS.blend && isEnabled('blend', isAdmin) && activeTab === 'blend' && (
           <BlendStudio />
         )}
+        </>)}
       </main>
 
       {/* Footer — P10 internal-use notice */}
       <footer className="site-footer">
-        🔒 Mutual Fund Research Center — For Internal Research Use Only. Not for distribution.
+        🔒 {desk.footerName} — For Internal Research Use Only. Not for distribution.
         <br />
         <span style={{ opacity: 0.6 }}>
-          Data sources: AMFI (navs), Yahoo Finance (indices) — for internal research purposes only.
+          Data sources: {desk.sources} — for internal research purposes only.
           · <a href="/status" style={{ color: 'var(--accent-a)', textDecoration: 'none' }} onClick={e => { e.preventDefault(); window.history.pushState({}, '', '/status'); setIsStatus(true) }}>Status</a>
         </span>
       </footer>

@@ -799,6 +799,278 @@ h1, h2, h3, h4, h5, h6 {
   .q-pill { transition: none; }
 }
 
+/* ── Product rail — the left slide-out desk switcher ─────────────────────────
+   Closed by default: a slim handle against the left edge, carrying the current
+   desk code so you always know where you are without opening anything. The
+   handle travels with the panel (left: var(--rail-w) when open) so the arrow
+   reads as the panel's own edge rather than a button parked nearby.
+
+   --rail-top is the freeze row height, written by ProductRail from a
+   ResizeObserver on the header. The 120px here is only the value used before
+   the first measurement lands; a fixed guess left a strip of page background
+   showing between the header and the panel at some breakpoints. */
+
+:root {
+  --rail-w:   256px;
+  --rail-top: 120px;
+}
+
+.rail-handle {
+  position: fixed;
+  top: calc(var(--rail-top) + 20px);
+  left: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 7px 13px;
+  border: 1px solid var(--line);
+  border-left: none;
+  border-radius: 0 12px 12px 0;
+  background: linear-gradient(155deg, var(--bg-card) 0%, var(--bg-raised) 100%);
+  color: var(--text-mid);
+  cursor: pointer;
+  box-shadow: 5px 0 20px rgba(0, 0, 0, 0.35);
+  /* transform, never `left`: animating a layout property put every frame
+     through layout and paint, which is what made the slide stutter. The
+     transform runs on the compositor instead. */
+  transform: translateX(0);
+  will-change: transform;
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+              color var(--transition),
+              box-shadow var(--transition),
+              border-color var(--transition);
+}
+.rail-handle::before {
+  /* A hairline of accent down the outer edge — enough to read as a control
+     rather than a stray border, without lighting up the whole page. */
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--accent-a), var(--accent-b));
+  opacity: 0.55;
+  transition: opacity var(--transition);
+}
+.rail-handle:hover {
+  color: var(--accent-a);
+  border-color: var(--accent-a);
+  box-shadow: 5px 0 26px rgba(34, 211, 238, 0.22);
+}
+.rail-handle:hover::before { opacity: 1; }
+.rail-handle:focus-visible {
+  outline: 2px solid var(--accent-a);
+  outline-offset: 2px;
+}
+.rail-handle.open { transform: translateX(var(--rail-w)); }
+
+.rail-chev { transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1); }
+.rail-handle.open .rail-chev { transform: rotate(180deg); }
+
+.rail-handle-code {
+  writing-mode: vertical-rl;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--accent-a);
+}
+
+.rail-panel {
+  position: fixed;
+  top: var(--rail-top);
+  left: 0;
+  bottom: 0;
+  width: var(--rail-w);
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 14px 16px;
+  background: var(--bg-card);
+  border-right: 1px solid var(--line);
+  box-shadow: 14px 0 44px rgba(0, 0, 0, 0.45);
+  /* visibility, not display: the panel keeps its slide transition, and hidden
+     also takes its buttons out of the tab order while closed. */
+  transform: translateX(-100%);
+  visibility: hidden;
+  will-change: transform;
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+              visibility 0s linear 420ms;
+}
+.rail-panel.open {
+  transform: none;
+  /* Visible immediately on the way in, hidden only once the slide out has
+     finished — hence the delay on the closed state above. */
+  visibility: visible;
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+              visibility 0s;
+}
+.rail-panel::before {
+  /* Picks up the freeze row accent underline, so the panel reads as hanging off
+     the header rather than floating on its own. */
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-a), var(--accent-b));
+  opacity: 0.7;
+}
+
+.rail-eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  color: var(--text-low);
+  /* The panel has room to spare, so use it: the label sits clear of the first
+     desk rather than crowding it. */
+  margin: 4px 0 16px 3px;
+}
+
+.rail-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 11px 11px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--bg-raised);
+  color: var(--text-hi);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform var(--transition), border-color var(--transition),
+              box-shadow var(--transition), background var(--transition);
+}
+.rail-item:hover {
+  transform: translateX(3px);
+  border-color: var(--accent-a);
+}
+.rail-item:focus-visible {
+  outline: 2px solid var(--accent-a);
+  outline-offset: 2px;
+}
+.rail-item.active {
+  background: var(--bg-card);
+  border-color: var(--accent-a);
+  box-shadow: var(--shadow-glow);
+}
+.rail-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent-a);
+}
+
+.rail-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 16px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.32);
+}
+
+.rail-text { flex: 1; min-width: 0; }
+.rail-name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.rail-blurb {
+  display: block;
+  font-size: 10px;
+  color: var(--text-low);
+  letter-spacing: 0.015em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rail-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--accent-a);
+  box-shadow: 0 0 9px var(--accent-a);
+}
+.rail-go { color: var(--text-low); flex-shrink: 0; }
+.rail-item:hover .rail-go { color: var(--accent-a); }
+
+.rail-tag {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--other);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.rail-foot {
+  margin-top: auto;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--text-low);
+}
+.rail-foot kbd {
+  display: inline-block;
+  padding: 1px 4px;
+  margin: 0 1px;
+  font-family: var(--font-ui);
+  font-size: 9px;
+  color: var(--text-mid);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+
+@media (max-width: 640px) {
+  :root { --rail-w: 224px; }
+}
+
+/* ── Structure scaffold — a desk whose tabs exist but whose data does not ────
+   Wireframes, never numbers. A shimmer would read as "loading"; these are flat
+   and dashed on purpose, so the panel says "not built yet" at a glance and can
+   never be mistaken for real figures. */
+
+.scaffold-pill {
+  font-family: var(--font-ui);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--other);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.32);
+}
+
 /* ── Category picker ────────────────────────────────────────────────────────
    Used where a desk's categories match none of the mutual fund main-tab names,
    which would otherwise bury every one of them in a dropdown. The colour is set
@@ -808,13 +1080,6 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
-}
-.cat-picker.vertical {
-  flex-direction: column;
-  flex-wrap: nowrap;
-  gap: 6px;
-  min-width: 260px;
-  max-width: 340px;
 }
 
 .cat-chip {
@@ -833,9 +1098,7 @@ h1, h2, h3, h4, h5, h6 {
   transition: border-color var(--transition), background var(--transition),
               color var(--transition), transform var(--transition);
 }
-.cat-picker.vertical .cat-chip { width: 100%; }
 .cat-chip:hover { transform: translateY(-1px); }
-.cat-picker.vertical .cat-chip:hover { transform: translateX(2px); }
 .cat-chip.active { font-weight: 600; }
 .cat-chip:focus-visible {
   outline: 2px solid var(--accent-a);
@@ -859,6 +1122,211 @@ h1, h2, h3, h4, h5, h6 {
 
 /* The screener's pills gain the same dot. */
 .pill .cat-dot { margin-right: 6px; vertical-align: middle; }
+
+/* ── SIF register: one colour per strategy ───────────────────────────────────
+   The sub-heading rows carry their own colour rather than the asset class's, so
+   two strategies inside the same asset class are told apart at a glance. The
+   colour itself is set inline from the slug (see SifUniverse), because it has to
+   be stable per strategy rather than per position. */
+.strategy-row td {
+  padding-top: 0.45rem;
+  padding-bottom: 0.45rem;
+  padding-left: 1.4rem;
+}
+.strategy-name {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.strategy-count {
+  margin-left: 0.55rem;
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid;
+  vertical-align: middle;
+}
+.strategy-empty {
+  margin-left: 0.6rem;
+  font-size: 10px;
+  font-style: italic;
+  color: var(--text-low);
+}
+.plan-source-tag {
+  margin-left: 0.5rem;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--other);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  cursor: help;
+}
+
+/* Connected, as opposed to scaffolded. Green rather than amber so the two
+   states are told apart at a glance and not only by their words. */
+.scaffold-pill.live {
+  color: var(--gain);
+  background: rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.34);
+}
+
+.scaffold-eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  color: var(--text-low);
+  margin-bottom: 7px;
+}
+
+.scaffold-stack { display: flex; flex-direction: column; gap: 1rem; }
+
+.scaffold-card {
+  padding: 1rem 1.15rem 1.1rem;
+  border-style: dashed;
+  background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-base) 130%);
+}
+
+.scaffold-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+.scaffold-title {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-hi);
+}
+.scaffold-note {
+  font-size: 0.75rem;
+  color: var(--text-mid);
+  margin-top: 2px;
+  max-width: 62ch;
+}
+.scaffold-kind {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-low);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+
+.scaffold-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 0.85rem;
+}
+.scaffold-part {
+  font-size: 10px;
+  color: var(--text-mid);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 7px;
+}
+
+.scaffold-foot {
+  margin-top: 1.1rem;
+  padding: 0.8rem 1rem;
+  border-left: 3px solid var(--accent-a);
+  border-radius: 0 8px 8px 0;
+  background: var(--bg-raised);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  color: var(--text-mid);
+}
+
+/* Wireframe primitives — flat greys, no animation. */
+.wf-bar, .wf-hcell, .wf-cell {
+  background: var(--line);
+  border-radius: 3px;
+  opacity: 0.55;
+}
+.wf-table { display: flex; flex-direction: column; gap: 7px; }
+.wf-head, .wf-row {
+  display: grid;
+  grid-template-columns: 2.4fr repeat(6, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+.wf-hcell { height: 9px; opacity: 0.85; }
+.wf-row .wf-bar { height: 7px; }
+.wf-head { padding-bottom: 7px; border-bottom: 1px dashed var(--line); }
+
+.wf-chart {
+  height: 96px;
+  border: 1px dashed var(--line);
+  border-radius: 7px;
+  padding: 6px;
+  background: var(--bg-base);
+}
+.wf-chart svg { width: 100%; height: 100%; }
+.wf-axis { stroke: var(--line); stroke-width: 1; }
+.wf-line {
+  fill: none;
+  stroke: var(--accent-a);
+  stroke-width: 1.6;
+  stroke-dasharray: 4 3;
+  opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+}
+.wf-line-b { stroke: var(--text-low); opacity: 0.45; }
+
+.wf-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+}
+.wf-cell { height: 16px; border-radius: 4px; }
+.wf-grid .wf-cell:nth-child(4n + 1) { opacity: 0.75; }
+
+.wf-split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.wf-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px;
+  border: 1px dashed var(--line);
+  border-radius: 7px;
+}
+.wf-pane .wf-bar { height: 8px; }
+.wf-pane .wf-bar:nth-child(2) { width: 82%; }
+.wf-pane .wf-bar:nth-child(3) { width: 64%; }
+
+.tabmap { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabmap-chip {
+  font-size: 10.5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--text-mid);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+}
+.tabmap-chip.gone {
+  color: var(--text-low);
+  border-style: dashed;
+  text-decoration: line-through;
+  text-decoration-color: var(--text-low);
+  opacity: 0.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-panel,
+  .rail-handle,
+  .rail-chev,
+  .rail-item { transition: none; }
+}
 
 /* Second line of a table column heading — the months a quarter covers, or the
    year under a month name. Muted and small so the heading still reads as one

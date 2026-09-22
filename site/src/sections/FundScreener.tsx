@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react'
 import { useMeta, useCategoryTable, useGlance } from '../hooks/useData'
 import { fmtPct, heatmapClass, retColor, assetClassColor } from '../utils/format'
 import { categoryColor } from '../config/categoryColors'
+import { currentDesk } from '../config/products'
 import DownloadButton from '../components/DownloadButton'
+import ComingFunds from '../components/ComingFunds'
 import type { SheetSpec } from '../utils/xlsx'
 import { orderPeriods, periodLabelParts } from '../utils/periods'
 import { useTableSort, sortRows } from '../hooks/useTableSort'
@@ -372,6 +374,7 @@ export default function FundScreener({ selectedFunds, onToggleFund,
    */
   const buildExport = (): SheetSpec | null => {
     if (!tableData) return null
+    const desk = currentDesk()
     const periodCols = sortedPeriodKeys.map(pk => {
       const { main, sub } = periodLabelParts(pk)
       return { key: pk, label: sub ? `${main} ${sub}` : main, type: 'percent' as const }
@@ -400,6 +403,7 @@ export default function FundScreener({ selectedFunds, onToggleFund,
       sheet: scope,
       title: `Fund Screener - ${scope}`,
       meta: [
+        ['Desk', desk.name],
         ['Category', tableData.category_name],
         ...(isSectoral && selectedSector !== ALL_SECTORS
           ? [['Sector', selectedSector] as [string, string]] : []),
@@ -420,7 +424,7 @@ export default function FundScreener({ selectedFunds, onToggleFund,
         ...periodCols,
       ],
       rows,
-      fileName: `Fund Screener - ${scope} - ${view} - ${tableData.as_of}`,
+      fileName: `${desk.code} Fund Screener - ${scope} - ${view} - ${tableData.as_of}`,
     }
   }
 
@@ -667,31 +671,8 @@ export default function FundScreener({ selectedFunds, onToggleFund,
           <div className="p-8 text-center" style={{ color: 'var(--text-mid)' }}>
             {/* A category with no funds has no file at all, because the engine
                 only writes one for categories it found schemes in. Absent is the
-                answer here, not a fault.
-
-                400 AS WELL AS 404, and that is not defensive padding: Supabase
-                Storage answers a missing object in a PRIVATE bucket with 400.
-                Measured — the SIF debt category returns 400 while the equity one
-                returns 200. scripts/supabase_store treats the same pair as
-                "absent" for exactly this reason. */}
-            {error && /\b(404|400)\b/.test(error) ? (
-              <>
-                <div style={{ color: 'var(--text-hi)', marginBottom: 4, fontWeight: 600 }}>
-                  No data
-                </div>
-                <div className="text-xs">
-                  No fund has been launched under this category, so there is nothing
-                  to show.
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ color: 'var(--loss)', marginBottom: 4 }}>
-                  Could not load this category.
-                </div>
-                <div className="text-xs">{error ?? 'no data returned'}</div>
-              </>
-            )}
+                answer here, not a fault — see ComingFunds. */}
+            <ComingFunds error={error} subject="show" failedLabel="this category" />
           </div>
         )}
       </div>

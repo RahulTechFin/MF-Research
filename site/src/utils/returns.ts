@@ -77,7 +77,24 @@ export function nearestNext(series: Series, target: string): Resolved | null {
 }
 
 export interface PeriodReturn {
+  /**
+   * The HEADLINE figure, in the engine's convention: simple up to a year,
+   * annualised beyond it. This is what "3Y return" means on every Indian fund
+   * factsheet, and it is what the precomputed tables hold, so it stays the
+   * comparable number.
+   */
   ret: number | null
+  /**
+   * The ABSOLUTE (cumulative) return over the resolved window — what the money
+   * actually did, start to end, never annualised.
+   *
+   * It exists separately because `ret` and `cagr` are the same number beyond a
+   * year, and a screen showing both columns from `ret` reads as though the two
+   * measures agree. Over three years a fund up 60% in total has a CAGR near
+   * 17%; both are true and they answer different questions.
+   */
+  abs: number | null
+  /** Annualised, and only beyond 366 days — see the note in pointToPoint. */
   cagr: number | null
   startDate: string | null
   endDate: string | null
@@ -85,7 +102,7 @@ export interface PeriodReturn {
 }
 
 const EMPTY: PeriodReturn = {
-  ret: null, cagr: null, startDate: null, endDate: null, days: null,
+  ret: null, abs: null, cagr: null, startDate: null, endDate: null, days: null,
 }
 
 /**
@@ -112,7 +129,9 @@ export function pointToPoint(series: Series, start: string, end: string): Period
   // Annualise only beyond a year, matching the engine. Annualising a 3-month
   // return would quadruple a quarter's noise and read as a forecast.
   const cagr = days > 366 ? Math.pow(e.value / s.value, 365 / days) - 1 : null
-  return { ret, cagr, startDate: s.date, endDate: e.date, days }
+  // Point-to-point is the one place `ret` was already absolute: the user picked
+  // the two dates, so the cumulative move between them IS the headline answer.
+  return { ret, abs: ret, cagr, startDate: s.date, endDate: e.date, days }
 }
 
 /** Trailing periods, matching TRAILING_PERIODS in the engine. */
@@ -147,9 +166,15 @@ export function trailingFrom(series: Series, anchor: string, period: string): Pe
   const days = daysBetween(s.date, e.date)
   const ratio = e.value / s.value
   const simple = months <= 12
+  const annualised = Math.pow(ratio, 365 / days) - 1
   return {
-    ret: simple ? ratio - 1 : Math.pow(ratio, 365 / days) - 1,
-    cagr: simple ? null : Math.pow(ratio, 365 / days) - 1,
+    // Beyond a year the headline IS the annualised figure — factsheet
+    // convention, and what the precomputed trailing tables hold.
+    ret: simple ? ratio - 1 : annualised,
+    // The cumulative move, always. Over a 3Y window this is the number that
+    // differs from `ret`, and the one a reader means by "how much did it make".
+    abs: ratio - 1,
+    cagr: simple ? null : annualised,
     startDate: s.date,
     endDate: e.date,
     days,

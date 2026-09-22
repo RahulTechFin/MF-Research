@@ -31,6 +31,11 @@ const BUILD_HAS_ADMIN = PROFILE === 'admin'
 // To let the team see another tab, move its id into publicSections there.
 import sectionConfig from './sections.json'
 
+// The desk registry. Type-only in the other direction, so there is no runtime
+// import cycle between these two files.
+import { productById } from './products'
+import type { ProductId } from './products'
+
 /** Sections everyone sees, no password needed. */
 export const PUBLIC_SECTIONS: readonly string[] = sectionConfig.publicSections
 
@@ -92,9 +97,33 @@ export function isEnabled(id: string, isAdmin: boolean): boolean {
   return BUILD_HAS_ADMIN && isAdmin
 }
 
-/** Tabs to render right now. */
-export function visibleTabs(isAdmin: boolean) {
-  return ALL_TABS.filter(t => isEnabled(t.id, isAdmin))
+/**
+ * Tabs to render right now, for one desk.
+ *
+ * Two independent filters, and they mean different things. `excludes` is what
+ * the desk does not HAVE — SIF has no Market Pulse and no Blend Studio, so those
+ * tabs are absent rather than locked. isEnabled is the password gate on what a
+ * desk does have.
+ */
+export function visibleTabs(isAdmin: boolean, product: ProductId = 'mf') {
+  const excluded = productById(product).excludes
+  return ALL_TABS.filter(t => isEnabled(t.id, isAdmin) && !excluded.includes(t.id))
+}
+
+/**
+ * Where a desk lands, and where it falls back to when a remembered tab is no
+ * longer allowed. Derived from the tab list rather than hard-coded, so a desk
+ * that excludes its way past the default still opens on something real.
+ */
+export function defaultTab(product: ProductId = 'mf', isAdmin = false): SectionId {
+  const tabs = visibleTabs(isAdmin, product)
+  if (tabs.some(t => t.id === DEFAULT_TAB)) return DEFAULT_TAB
+  return tabs[0]?.id ?? DEFAULT_TAB
+}
+
+/** Is `tab` a real tab on this desk, for this viewer? */
+export function tabAllowed(tab: string, isAdmin: boolean, product: ProductId): boolean {
+  return visibleTabs(isAdmin, product).some(t => t.id === tab)
 }
 
 /** Whether to offer the unlock control at all. */
@@ -102,3 +131,20 @@ export const CAN_UNLOCK = BUILD_HAS_ADMIN
 
 /** Landing tab, and the fallback when a saved tab is no longer permitted. */
 export const DEFAULT_TAB: SectionId = 'market-pulse'
+
+/**
+ * Whether this build offers any desk other than Mutual Fund.
+ *
+ * A plain constant for the same reason BUILD_SECTIONS is one: in a team build it
+ * folds to false and Rollup drops ProductRail, SifDashboard and everything they
+ * import. Confirmed against dist-team -- none of their strings survive.
+ *
+ * TWO THINGS DO SURVIVE, and neither is a leak worth chasing. The PRODUCTS
+ * registry stays, because productById() is called at runtime to title the
+ * freeze row, so a team bundle still contains the words "SIF RESEARCH CENTER".
+ * And the rail's CSS stays, because the handwritten stylesheet is not purged --
+ * only Tailwind's own utilities are. Class names and a desk label, with no code
+ * to render them. If the mere name has to be absent, drop the entry from
+ * PRODUCTS behind the same flag.
+ */
+export const BUILD_HAS_PRODUCTS = BUILD_HAS_ADMIN

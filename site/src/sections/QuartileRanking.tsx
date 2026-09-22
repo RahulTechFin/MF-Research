@@ -4,8 +4,10 @@ import { useState, useMemo, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useMeta, useQuartiles } from '../hooks/useData'
 import CategoryPicker from '../components/CategoryPicker'
+import ComingFunds from '../components/ComingFunds'
 import { periodLabelParts } from '../utils/periods'
 import DownloadButton from '../components/DownloadButton'
+import { currentDesk } from '../config/products'
 import type { SheetSpec } from '../utils/xlsx'
 import { categoryColor } from '../config/categoryColors'
 import { quartilePillClass, fmtPct, shortFundName } from '../utils/format'
@@ -200,6 +202,7 @@ export default function QuartileRanking() {
    */
   const buildExport = (): SheetSpec | null => {
     if (!data) return null
+    const desk = currentDesk()
     const order = data.period_labels.map((_l, i) => i).reverse()
     const cols: SheetSpec['columns'] = [
       { key: 'fund', label: 'Fund Name', type: 'text', width: 46 },
@@ -231,6 +234,7 @@ export default function QuartileRanking() {
       sheet: `Quartiles ${mode}`,
       title: `Quartile Ranking - ${data.category_name} (${mode})`,
       meta: [
+        ['Desk', desk.name],
         ['Category', data.category_name],
         ['Mode', mode],
         ['Data as of', data.as_of],
@@ -246,7 +250,7 @@ export default function QuartileRanking() {
       ],
       columns: cols,
       rows,
-      fileName: `Quartiles - ${data.category_name} - ${mode} - ${data.as_of}`,
+      fileName: `${desk.code} Quartiles - ${data.category_name} - ${mode} - ${data.as_of}`,
     }
   }
 
@@ -505,14 +509,21 @@ export default function QuartileRanking() {
         </div>
 
       {/* ── Controls ─────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <div className="flex gap-2 flex-wrap items-center">
+      {/* The mode buttons and Download stay pinned top-right whatever the left
+          side does. With the SIF strategies laid out in a row the left side is
+          wide enough to wrap, and a wrapping PARENT would carry the mode buttons
+          down with it — moving a control the reader expects to find in one
+          place. So the parent no longer wraps: the category list wraps inside
+          its own box, and the right-hand group cannot be pushed off the line. */}
+      <div className="flex items-start justify-between mb-4 gap-3">
+        <div className="flex gap-2 flex-wrap items-center flex-1 min-w-0">
           {/* A desk whose categories match none of the mutual fund main-tab names
               would otherwise put every one of them in the dropdown. Show them all
-              instead, stacked and each in its own colour. */}
+              instead, in a row, each in its own colour — the same arrangement as
+              every other tab, so the control does not move between them. */}
           {mainTabs.length === 0 ? (
             <CategoryPicker cats={eligibleCats} active={activeSlug}
-                            onChange={setSlug} vertical />
+                            onChange={setSlug} />
           ) : (
             <>
               <div className="tab-bar">
@@ -666,25 +677,11 @@ export default function QuartileRanking() {
         ) : (
           <div className="p-8 text-center" style={{ color: 'var(--text-mid)' }}>
             {/* An absent file means the category has no funds to rank -- the
-                engine only writes one where it found schemes. Supabase answers a
-                missing object with 400 in a private bucket and 404 in a public
-                one, so both count as absent. */}
-            {error && /\b(404|400)\b/.test(error) ? (
-              <>
-                <div style={{ color: 'var(--text-hi)', marginBottom: 4 }}>
-                  No funds in this category yet.
-                </div>
-                <div className="text-xs">
-                  Nothing to rank until a scheme is launched under this strategy.
-                </div>
-              </>
-            ) : error ? (
-              <>
-                <div style={{ color: 'var(--loss)', marginBottom: 4 }}>
-                  Could not load the quartile grid.
-                </div>
-                <div className="text-xs">{error}</div>
-              </>
+                engine only writes one where it found schemes. See ComingFunds
+                for why a 400 counts as absent too. */}
+            {error ? (
+              <ComingFunds error={error} subject="rank"
+                           failedLabel="the quartile grid" />
             ) : (
               <>
                 <div style={{ color: 'var(--text-hi)', marginBottom: 4 }}>

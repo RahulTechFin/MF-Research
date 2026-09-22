@@ -4,9 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { computeDrawdown } from '../utils/drawdown'
 import { MARKET_PULSE_INDICES, LIVE_INDEX_BASE } from '../config/indices'
 import type { LiveIndexFile } from '../config/indices'
-import { DATA_BASE, categoryPath, navPath } from '../config/dataPaths'
-
-const BASE = DATA_BASE
+import { dataBase, MARKET_BASE, categoryPath, navPath } from '../config/dataPaths'
 
 /**
  * Fetch one JSON file from the data bucket.
@@ -19,7 +17,8 @@ const BASE = DATA_BASE
  * `key` identifies the request for the effect's dependency list, since a
  * function identity changes on every render and cannot be compared.
  */
-export function useJson<T>(path: string | (() => Promise<string>), key?: string) {
+export function useJson<T>(path: string | (() => Promise<string>), key?: string,
+                          base?: string) {
   const [data, setData]   = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -30,10 +29,26 @@ export function useJson<T>(path: string | (() => Promise<string>), key?: string)
     let cancelled = false
     setLoading(true)
     setError(null)
+    // DROP THE PREVIOUS FILE'S CONTENT. It belongs to the file we just stopped
+    // asking for, and every caller renders `loading ? skeleton : data ? table`,
+    // so anything left here is shown under the NEW heading.
+    //
+    // That is how clicking a SIF debt strategy listed another strategy's funds:
+    // its category file does not exist, the fetch 400s, `error` is set — and the
+    // stale `data` was still truthy, so the table branch won. The reader saw a
+    // full table of equity funds titled "Debt Long-Short Fund", and the
+    // "Coming Funds" state below it was unreachable.
+    //
+    // Clearing costs a skeleton flash on every category change, where before the
+    // old numbers stayed on screen a moment longer. That trade is not close: one
+    // is a redraw, the other is the wrong fund list under the right name.
+    setData(null)
 
     const resolve = typeof path === 'string' ? Promise.resolve(path) : path()
     resolve
-      .then(p => fetch(`${BASE}/${p}`))
+      // `base` overrides the desk root for files that are shared between desks.
+      // Only the index series needs it; everything else is desk-scoped.
+      .then(p => fetch(`${base ?? dataBase()}/${p}`))
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
@@ -109,7 +124,7 @@ export function useIndices() {
     }
 
     const committed = async (): Promise<IndicesData> => {
-      const r = await fetch(`${BASE}/indices.json`)
+      const r = await fetch(`${MARKET_BASE}/indices.json`)
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       return (await r.json()) as IndicesData
     }
@@ -230,7 +245,7 @@ export function useNavSeriesMany(codes: string[]) {
         if (!code) return
         try {
           const path = await navPath(code)
-          const r = await fetch(`${BASE}/${path}`)
+          const r = await fetch(`${dataBase()}/${path}`)
           if (r.ok) {
             const d = await r.json()
             if (d?.series?.length) out[code] = d.series as Series
@@ -261,9 +276,25 @@ export function useNavSeriesMany(codes: string[]) {
   return { series, loaded, total: codes.length, loading }
 }
 
-/** One index's full series, for the benchmark comparison. */
+/**
+ * One index's full series, for the benchmark comparison.
+ *
+ * READS THE SHARED MARKET ROOT, never the desk root. The 36 benchmark series are
+ * published once and only under the mutual fund tree, because the same NIFTY 500
+ * has to mean the same thing on every desk — the SIF publish deliberately drops
+ * its own copies rather than duplicating them into a second bucket.
+ *
+ * This was the one index consumer that reached the data through useJson rather
+ * than a direct fetch, so it was missed when the two roots were separated. The
+ * effect was narrow and easy to overlook: on the SIF desk every request became
+ * /sif/data/index/<id>.json, which does not exist, so Rolling & Point-to-Point
+ * had no benchmark line, no benchmark return, and a blank vs-Benchmark column,
+ * while every other screen looked fine.
+ */
 export function useIndexSeries(indexId: number | null) {
   return useJson<{ index_id: number; index_name: string; series: [string, number][] }>(
     indexId ? `index/${indexId}.json` : '',
+    indexId ? `index:${indexId}` : '',
+    MARKET_BASE,
   )
 }

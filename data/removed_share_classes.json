@@ -1,0 +1,164 @@
+[
+  {
+    "scheme_code": "100247",
+    "scheme_name": "JM Liquid Fund",
+    "category_name": "Liquid Fund",
+    "isin": "INF192K01981"
+  },
+  {
+    "scheme_code": "100375",
+    "scheme_name": "Nippon India Growth Mid Cap Fund",
+    "category_name": "Mid Cap",
+    "isin": "INF204K01299"
+  },
+  {
+    "scheme_code": "100376",
+    "scheme_name": "Nippon India Growth Mid Cap Fund",
+    "category_name": "Mid Cap",
+    "isin": "INF204K01315"
+  },
+  {
+    "scheme_code": "100546",
+    "scheme_name": "Franklin India Liquid Fund",
+    "category_name": "Liquid Fund",
+    "isin": "INF090I01BG0"
+  },
+  {
+    "scheme_code": "100608",
+    "scheme_name": "Sundaram Medium Term Fund (Formerly Known as Sundaram Medium Duration Fund)",
+    "category_name": "Medium Duration",
+    "isin": "INF903J01FY6"
+  },
+  {
+    "scheme_code": "100723",
+    "scheme_name": "UTI - Money Market Fund",
+    "category_name": "Money Market",
+    "isin": "INF789F01BF5"
+  },
+  {
+    "scheme_code": "100781",
+    "scheme_name": "Sundaram Banking and PSU Debt Fund (Formerly Known as Sundaram Banking and PSU Fund)",
+    "category_name": "Banking & PSU",
+    "isin": "INF903J01IK9"
+  },
+  {
+    "scheme_code": "100794",
+    "scheme_name": "Sundaram Small Cap Fund",
+    "category_name": "Small Cap",
+    "isin": "INF903J01454"
+  },
+  {
+    "scheme_code": "100837",
+    "scheme_name": "Nippon India Liquid Fund",
+    "category_name": "Liquid Fund",
+    "isin": "INF204K01UL3"
+  },
+  {
+    "scheme_code": "102009",
+    "scheme_name": "UTI - Liquid Fund",
+    "category_name": "Liquid Fund",
+    "isin": "INF789F1AF44"
+  },
+  {
+    "scheme_code": "102512",
+    "scheme_name": "UTI - Gilt Fund",
+    "category_name": "Gilt",
+    "isin": "INF789F01PT6"
+  },
+  {
+    "scheme_code": "102540",
+    "scheme_name": "UTI Ultra Short to Short Term Fund",
+    "category_name": "Low Duration",
+    "isin": "INF789F01331"
+  },
+  {
+    "scheme_code": "106253",
+    "scheme_name": "Nippon India Multi Cap Fund",
+    "category_name": "Multi Cap",
+    "isin": "INF204K01448"
+  },
+  {
+    "scheme_code": "106260",
+    "scheme_name": "Nippon India Growth Mid Cap Fund",
+    "category_name": "Mid Cap",
+    "isin": "INF204K01257"
+  },
+  {
+    "scheme_code": "106384",
+    "scheme_name": "UTI Short Term Fund",
+    "category_name": "Short Duration",
+    "isin": "INF789F01AJ9"
+  },
+  {
+    "scheme_code": "109061",
+    "scheme_name": "Sundaram Financial Services Opportunities Fund",
+    "category_name": "Sectoral/Thematic",
+    "isin": "INF903J01652"
+  },
+  {
+    "scheme_code": "109717",
+    "scheme_name": "Nippon India Gilt Fund",
+    "category_name": "Gilt",
+    "isin": "INF204K01BX8"
+  },
+  {
+    "scheme_code": "111748",
+    "scheme_name": "Nippon India Ultra Short to Short Term Fund",
+    "category_name": "Low Duration",
+    "isin": "INF204K01EN3"
+  },
+  {
+    "scheme_code": "112083",
+    "scheme_name": "UTI Ultra Short Term Fund",
+    "category_name": "Ultra Short Duration",
+    "isin": "INF789F01PM1"
+  },
+  {
+    "scheme_code": "129199",
+    "scheme_name": "HSBC Aggressive Hybrid Active FOF (erstwhile HSBC Managed Solutions India - Growth fund)",
+    "category_name": "FoF Domestic",
+    "isin": "INF336L01HY1"
+  },
+  {
+    "scheme_code": "139889",
+    "scheme_name": "Franklin India Liquid Fund",
+    "category_name": "Liquid Fund",
+    "isin": "INF090I01LO3"
+  },
+  {
+    "scheme_code": "139890",
+    "scheme_name": "Franklin India Liquid Fund",
+    "category_name": "Liquid Fund",
+    "isin": "INF090I01LP0"
+  },
+  {
+    "scheme_code": "139891",
+    "scheme_name": "Franklin India Liquid Fund",
+    "category_name": "Liquid Fund",
+    "isin": "INF090I01LQ8"
+  },
+  {
+    "scheme_code": "139892",
+    "scheme_name": "Franklin India Liquid Fund",
+    "category_name": "Liquid Fund",
+    "isin": "INF090I01LR6"
+  },
+  {
+    "scheme_code": "149666",
+    "scheme_name": "Sundaram Multi Cap Fund (Formerly Known as Principal Multi Cap Growth Fund)",
+    "category_name": "Multi Cap",
+    "isin": "INF173K01957"
+  },
+  {
+    "scheme_code": "153755",
+    "scheme_name": "Kotak Active Momentum Fund - Regular Plan - Growth",
+    "category_name": "Sectoral/Thematic",
+    "isin": "INF174KA1XD8"
+  },
+  {
+    "scheme_code": "154070",
+    "scheme_name": "JioBlackRock Overnight Fund",
+    "category_name": "Overnight Fund",
+    "isin": "-"
+  }
+]

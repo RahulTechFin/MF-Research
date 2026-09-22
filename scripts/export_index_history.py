@@ -97,16 +97,30 @@ def restore_into(conn: sqlite3.Connection, path: str = INDEX_HISTORY_PATH) -> in
         log.warning("No committed index history at %s", path)
         return 0
 
+    # The committed file is the build's ONLY source of index history before the
+    # Yahoo top-up, so a glitch in it reaches every published risk figure. See
+    # index_store.drop_isolated_outliers for what this catches and what it
+    # deliberately leaves alone.
+    from scripts.index_store import drop_isolated_outliers
+
     rows = []
+    dropped = 0
     for iid, s in payload["series"].items():
         idx = int(iid)
-        rows.extend(zip([idx] * len(s["dates"]), s["dates"], s["closes"]))
+        points = dict(zip(s["dates"], s["closes"]))
+        cleaned, notes = drop_isolated_outliers(points, f"index {iid}")
+        for note in notes:
+            log.warning("   %s", note)
+        dropped += len(points) - len(cleaned)
+        rows.extend((idx, d, c) for d, c in sorted(cleaned.items()))
 
     conn.executemany(
         "INSERT OR IGNORE INTO index_history(index_id, date, close) VALUES(?,?,?)", rows
     )
     conn.commit()
-    log.info("Restored %s index rows from the committed history", f"{len(rows):,}")
+    log.info("Restored %s index rows from the committed history%s",
+             f"{len(rows):,}",
+             f" ({dropped} glitched point(s) dropped)" if dropped else "")
     return len(rows)
 
 

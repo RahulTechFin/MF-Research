@@ -20,7 +20,38 @@
 // screener would couple two screens that are otherwise independent. manifest.json
 // carries both lookups — ~20 KB gzipped, fetched once per session.
 
-export const DATA_BASE = import.meta.env.BASE_URL + 'data'
+// ── TWO ROOTS, AND THE DISTINCTION MATTERS ─────────────────────────────────
+//
+// MARKET_BASE  index and benchmark series. The same closes for every desk, and
+//              published exactly once. A SIF fund measured against a different
+//              NIFTY 500 than an MF fund would be a bug, and duplicating the 36
+//              index files into a second bucket to achieve it would be worse.
+//
+// dataBase()   everything belonging to one desk: its funds, categories,
+//              quartiles, NAVs. Switched when the desk switches.
+export const MARKET_BASE = import.meta.env.BASE_URL + 'data'
+
+// Mutable because the desk is chosen at runtime. Read through dataBase() rather
+// than captured in a const, since every fetch happens inside an effect long
+// after module evaluation.
+let root = 'data'
+
+/**
+ * Point every desk-scoped fetch at another tree.
+ *
+ * Called from App on each render, so it is set before any child effect runs. The
+ * manifest cache is dropped with it — a manifest maps fund codes to folders, and
+ * keeping the previous desk's would send SIF requests to MF paths.
+ */
+export function setDataRoot(next: string): void {
+  if (next === root) return
+  root = next
+  pending = null
+}
+
+export function dataBase(): string {
+  return import.meta.env.BASE_URL + root
+}
 
 interface Manifest {
   categories: Record<string, string>   // slug -> equity | hybrid | debt | other
@@ -33,7 +64,7 @@ let pending: Promise<Manifest> | null = null
 
 export function manifest(): Promise<Manifest> {
   if (!pending) {
-    pending = fetch(`${DATA_BASE}/manifest.json`)
+    pending = fetch(`${dataBase()}/manifest.json`)
       .then(r => {
         if (!r.ok) throw new Error(`manifest HTTP ${r.status}`)
         return r.json() as Promise<Manifest>
@@ -71,5 +102,10 @@ export async function navPath(schemeCode: string): Promise<string> {
 
 /** Absolute URL for a path inside the data bucket. */
 export function dataUrl(path: string): string {
-  return `${DATA_BASE}/${path}`
+  return `${dataBase()}/${path}`
+}
+
+/** Absolute URL for a shared market file, e.g. "index/1.json". */
+export function marketUrl(path: string): string {
+  return `${MARKET_BASE}/${path}`
 }

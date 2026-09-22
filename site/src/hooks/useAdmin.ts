@@ -86,12 +86,21 @@ async function verify(password: string, v: Verifier): Promise<boolean> {
 
 const STORAGE_KEY = 'mfrc_admin'
 
+/**
+ * Unlock state read straight from storage, outside React.
+ *
+ * For the handful of places that have to decide something during the very first
+ * render — which desk to open, which tab to restore — before any hook has run.
+ * useAdmin seeds itself from the same call, so the two cannot disagree.
+ */
+export function isUnlockedNow(): boolean {
+  return ADMIN_CONFIGURED && sessionStorage.getItem(STORAGE_KEY) === '1'
+}
+
 export function useAdmin() {
   // sessionStorage, not localStorage: the unlock lasts for the tab only, so a
   // shared machine does not stay unlocked once the window is closed.
-  const [isAdmin, setIsAdmin] = useState(
-    () => ADMIN_CONFIGURED && sessionStorage.getItem(STORAGE_KEY) === '1',
-  )
+  const [isAdmin, setIsAdmin] = useState(isUnlockedNow)
 
   useEffect(() => {
     if (isAdmin) sessionStorage.setItem(STORAGE_KEY, '1')

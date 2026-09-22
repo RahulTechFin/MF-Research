@@ -237,6 +237,12 @@ def main():
                     default="supabase",
                     help="NAV history source (default supabase: read back what "
                          "was published and extend it with AMFI's newest day)")
+    ap.add_argument("--skip-sif", action="store_true",
+                    help="skip the SIF desk (it runs after the MF publish and "
+                         "cannot affect it either way)")
+    ap.add_argument("--sif-full-history", action="store_true",
+                    help="rebuild the SIF NAV history from AMFI's first SIF day "
+                         "instead of only the missing days")
     ap.add_argument("--no-amfi-topup", action="store_true",
                     help="skip AMFI's latest-day top-up, leaving the newest NAV "
                          "wherever api.mfapi.in has it (a day behind AMFI)")
@@ -346,13 +352,41 @@ def main():
 
         publish(staging_dir, final_dir)
 
+        # ── 5. The SIF desk ──────────────────────────────────────────────
+        # AFTER the MF publish, deliberately. Both desks take their cap from
+        # build_db_from_api.previous_business_close, so they land on the same NAV
+        # date -- that is the point of running them in one job. But SIF writes to
+        # its own bucket and shares nothing with the MF pipeline, so a bad SIF day
+        # is reported and stepped over rather than being allowed to abort a run
+        # whose mutual fund data is already published and good.
+        sif_note = "skipped"
+        if args.skip_sif:
+            log.info("--skip-sif: the SIF desk was not updated")
+        else:
+            try:
+                from scripts.sif_daily import run as run_sif
+                # db_path is still on disk here -- the finally block below is
+                # what deletes it -- so the SIF desk copies the benchmark closes
+                # straight out of it instead of re-downloading them.
+                out = run_sif(mf_as_of=as_of, full_history=args.sif_full_history,
+                              index_source_db=db_path)
+                sif_note = (f"{out['funds']} funds, {out['rows']:,} rows, "
+                            f"newest {out['last']}")
+            except Exception as exc:
+                sif_note = f"FAILED ({type(exc).__name__}: {str(exc)[:120]})"
+                log.error("-" * 62)
+                log.error("SIF desk not updated: %s", sif_note)
+                log.error("The mutual fund dashboard is published and unaffected.")
+                log.error("-" * 62)
+
         log.info("=" * 62)
         log.info("DAILY RUN COMPLETE  as_of=%s  files=%d  elapsed=%.0fs",
                  as_of, written, time.time() - t0)
+        log.info("  SIF: %s", sif_note)
         log.info("=" * 62)
 
     finally:
-        # ── 5. Destroy the database — nothing is stored between runs ─────
+        # ── 6. Destroy the database — nothing is stored between runs ─────
         if args.keep_db:
             log.info("--keep-db: leaving %s in place", db_path)
         else:

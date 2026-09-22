@@ -122,9 +122,54 @@ LEGACY_PLAN_VARIANT = re.compile(
 )
 
 
+# AMFI writes a REGULATORY DISCLOSURE into the parent scheme's own name, and it
+# contains the word "segregated":
+#     Nippon India Credit Risk Fund (Existing Number of Segregated Portfolios - 1)
+#     Franklin India Low Duration Fund (No. of Segregated Portfolios-2)
+#     Baroda BNP Paribas Short Term Fund (the scheme has 2 segregated portfolios)
+# It states how many side-pockets the scheme has created. All 378 rows
+# mentioning "segregated" in today's file carry it in this parenthesised form,
+# and — the trap — the side-pockets carry the very same text, so on its own it
+# identifies nothing. See states_share_class for what follows from that.
+_SEGREGATED_DISCLOSURE_RE = re.compile(r"\((?=[^)]*\bsegregated\b)[^)]*\)", re.I)
+
+
 def is_legacy_plan_variant(name: str) -> bool:
     """True for duplicate/non-investable share classes — see LEGACY_PLAN_VARIANT."""
     return bool(LEGACY_PLAN_VARIANT.search(name or ""))
+
+
+def states_share_class(name: str, plan: str = "", option: str = "") -> bool:
+    """
+    True when AMFI itself said which share class a row is.
+
+    This is the licence to DELETE a catalogue entry, so it is deliberately
+    strict. Its opposite is not "this row qualifies" but "AMFI did not say",
+    and an entry AMFI has not spoken about must be left alone.
+
+    A segregated-portfolio count does not count as saying. AMFI appends the
+    parent scheme's disclosure to BOTH the parent and its side-pockets:
+
+        112938  Nippon India Credit Risk Fund (Existing Number of Segregated
+                Portfolios - 1)   Regular Plan   Growth option   NAV 38.1663
+        148094  Nippon India Credit Risk Fund (Existing Number of Segregated
+                Portfolios - 1)   Regular Plan   Growth Option   NAV  0.5036
+
+    Name, Plan and Option are identical; only the ISIN series (INF204KB1* for
+    the side-pockets) and the residual NAV betray which is which. Five Nippon
+    funds publish such a pair. LEGACY_PLAN_VARIANT matches the word
+    "segregated" and rejects both, which is the right call — there is no sound
+    way to choose between them and admitting both puts one fund on screen
+    twice. But it is not a verdict on the parent, which is a live fund the
+    catalogue already holds. So the disclosure is stripped before a legacy
+    marker is looked for here, while the rejection itself stands.
+    """
+    n = _SEGREGATED_DISCLOSURE_RE.sub(" ", name or "")
+    return (bool(_OPTION_STATED_RE.search(n))
+            or bool(_OPTION_STATED_RE.search(option or ""))
+            or is_legacy_plan_variant(n)
+            or is_legacy_plan_variant(plan)
+            or is_legacy_plan_variant(option))
 
 
 # Option wording, in either the name or AMFI's Option column.
@@ -215,33 +260,60 @@ def is_regular_growth(name: str, plan: str = "", option: str = "") -> bool:
     """
     Return True if this row is the Regular plan's growth option.
 
-    `plan` and `option` are AMFI's own columns. They are consulted only where the
-    NAME is silent, because the name is the more reliable of the two for
-    exclusion: AMFI stamps Option="Growth" on rows plainly named "Bonus Option"
-    or "IDCW Plan", and those are separate share classes whatever the column
-    claims. The columns earn their keep the other way round -- naming the option
-    when the fund name does not, as with "Samco Mid Cap Fund - Regular Plan"
-    (Option=Growth) and "BANK OF INDIA Credit Risk Fund - Regular Plan".
+    `plan` and `option` are AMFI's own columns, and they work in BOTH directions:
+    they name the option when the fund name does not ("Samco Mid Cap Fund -
+    Regular Plan", Option=Growth), and they rule a row out when the name cannot.
+
+    WHY THE COLUMNS MUST BE ABLE TO EXCLUDE
+    This used to accept any row whose NAME contained "growth", and only consult
+    the Option column when the name was silent. That works until a fund has the
+    word in its TITLE. "Nippon India Growth Mid Cap Fund" publishes four rows —
+    Growth Option, IDCW Option, Bonus Option and INSTITUTIONAL Plan IDCW Option —
+    all under that identical name. Every one matched "growth", so all four were
+    admitted as separate Regular Growth funds: one fund counted four times in the
+    Mid Cap average and ranked four times in the quartiles, with 12-month returns
+    of 0.8%, 8.9%, 8.9% and 3.0% pulling the category average apart.
+
+    The Option column said exactly what each row was the whole time.
+
+    ORDER MATTERS, and the name still excludes first. AMFI stamps Option="Growth"
+    on some rows plainly named "Bonus Option", so a name-based rejection has to
+    win over a column that claims Growth. What is new is the reverse: a column
+    saying IDCW, Bonus or Institutional now rejects a row whose name is silent
+    about it. Measured over the full 14,353-row file this removes 27 rows and
+    admits none: Institutional, Super Institutional, Retail, Discontinued,
+    Unclaimed, IDCW and Bonus share classes whose qualifier lives only in the
+    column. Every one is a duplicate of a fund already in the universe.
 
     Callers in ETF sections must pass plan="": ETFs are single-plan instruments
     and AMFI still marks several liquid ETFs "Direct Plan" while their names say
     nothing of the kind, so trusting the column there drops live funds.
     """
     n = (name or "").lower()
+    p = (plan or "").lower()
+    o = (option or "").lower()
 
-    # Duplicate share classes never belong, ETF exemption or not.
-    if is_legacy_plan_variant(name):
+    # Duplicate share classes never belong, ETF exemption or not. Checked against
+    # the columns as well: AMFI writes "INSTITUTIONAL Plan - IDCW Option" in the
+    # Option column of a scheme whose name mentions neither, which is how
+    # Nippon's institutional class reached Mid Cap.
+    if (is_legacy_plan_variant(name) or is_legacy_plan_variant(plan)
+            or is_legacy_plan_variant(option)):
         return False
     # Exclude Direct plans, by name and by column (see the docstring on why the
     # column is only safe outside ETF sections).
     if any(w in n for w in EXCLUDE_WORDS_PLAN):
         return False
-    if any(w in (plan or "").lower() for w in EXCLUDE_WORDS_PLAN):
+    if any(w in p for w in EXCLUDE_WORDS_PLAN):
         return False
 
-    # Must NOT be an income/bonus share class. The name decides this outright.
+    # Must NOT be an income/bonus share class. The NAME decides this first, so a
+    # row named "Bonus Option" stays out even when the column claims Growth.
     if any(w in n for w in ("idcw", "payout", "reinvest", "bonus",
                             "income distribution")):
+        return False
+    # Then the Option column, which is the only place many of these say so.
+    if any(w in o for w in EXCLUDE_WORDS_OPTION):
         return False
 
     # Normally exclude dividend, except if it is part of "dividend yield" category
@@ -252,11 +324,12 @@ def is_regular_growth(name: str, plan: str = "", option: str = "") -> bool:
         if any(w in n for w in ["payout", "reinvestment", "reinvest"]):
             return False
 
-    # Growth stated in the name wins outright.
-    if any(w in n for w in GROWTH_WORDS):
+    # Growth stated in the column wins, then the name. Both are only reached
+    # once every exclusion above has passed, so "growth" appearing in a fund's
+    # title can no longer drag its other share classes in with it.
+    if any(w in o for w in GROWTH_WORDS):
         return True
-    # Name says nothing about the option: fall back to AMFI's Option column.
-    if any(w in (option or "").lower() for w in GROWTH_WORDS):
+    if any(w in n for w in GROWTH_WORDS):
         return True
     return False
 
@@ -268,7 +341,8 @@ def is_etf_type(type_header: str) -> bool:
 
 # ── AMFI file parser ──────────────────────────────────────────────────────────
 
-def parse_amfi_text(text: str, is_etf_context=False):
+def parse_amfi_text(text: str, is_etf_context=False,
+                    rejected_share_class: "set | None" = None):
     """
     Parse AMFI semicolon-delimited NAV history text.
     Returns list of dicts: {scheme_code, scheme_name, amc_name, category_name, nav, nav_date, isin}
@@ -408,12 +482,44 @@ def parse_amfi_text(text: str, is_etf_context=False):
         # Filter Regular-Growth
         # Applies to both branches: an "Unclaimed" or "Institutional" variant is
         # a duplicate whether or not it sits under an ETF header.
+        #
+        # Each rejection here is recorded in `rejected_share_class` when the
+        # caller asks for it, and ONLY when AMFI actually said what the row is.
+        # That set is the only sound basis for pruning the catalogue, and getting
+        # it wrong is expensive, so both halves of that sentence are load-bearing:
+        #
+        #  - Not every skip is a share-class verdict. This function drops rows
+        #    for a dozen unrelated reasons — an unmapped or closed-end section, a
+        #    missing NAV, an unparseable date. Treating those as "not Regular
+        #    Growth" once deleted 31 perfectly good funds. Only the three tests
+        #    below are share-class verdicts, and only the ELSE branch knows that
+        #    an ETF is exempt from is_regular_growth.
+        #
+        #  - A verdict needs evidence, so the recording follows the REASON and
+        #    not merely the fact of a rejection. AMFI leaves Plan and Option
+        #    BLANK for many funds and publishes several such rows under one
+        #    identical name: "Motilal Oswal Midcap Fund" ships four rows today
+        #    (127039/127040/127042/127044), indistinguishable. silent_growth_codes
+        #    rightly refuses to guess, so all four are skipped — but 127039 is
+        #    the real Regular Growth row, catalogued under the fuller name AMFI
+        #    used to publish and has since dropped. Pruning on that skip deletes
+        #    the fund. Silence is not a verdict.
+        def _note_share_class_rejection(name="", plan="", option=""):
+            if rejected_share_class is not None and states_share_class(
+                    name, plan, option):
+                rejected_share_class.add(scheme_code)
+
         if is_legacy_plan_variant(scheme_name):
+            # A segregated-portfolio disclosure reaches this branch too, and it
+            # marks a live parent as readily as its side-pocket. Refusing the
+            # row is right; condemning the catalogue entry is not.
+            _note_share_class_rejection(scheme_name)
             continue
 
         if is_etf:
             # ETFs: only IDCW/dividend exclusion
             if any(w in scheme_name.lower() for w in EXCLUDE_WORDS_OPTION):
+                _note_share_class_rejection(scheme_name)
                 continue
         else:
             # plan_col is only defined on the header-mapped path; older 6-column
@@ -421,6 +527,7 @@ def parse_amfi_text(text: str, is_etf_context=False):
             if not (is_regular_growth(scheme_name, plan=plan_col,
                                       option=option_col)
                     or scheme_code in silent_ok):
+                _note_share_class_rejection(scheme_name, plan_col, option_col)
                 continue
 
         # Validate NAV

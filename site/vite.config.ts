@@ -21,6 +21,60 @@ const SUPABASE_PUBLIC = 'https://qhxofgrntftnxqdhottd.supabase.co/storage/v1/obj
 //     MF_OUTPUT_DIR=build/data-flat python scripts/publish_data.py --to-dir site/public/data
 const LOCAL_DATA = path.resolve(__dirname, 'public', 'data')
 
+// ── The SIF bucket ──────────────────────────────────────────────────────────
+//
+// Unlike "MF Data" and "Indicies Data", the SIF bucket is PRIVATE: it answers
+// nothing without the service key. So this proxy does what the other two do not
+// have to -- it attaches the key itself.
+//
+// The key is read from the repository-root .env (gitignored) and used only here,
+// inside the dev server, which is Node. It is never referenced from src/, so it
+// cannot reach the browser and it is not in the production bundle: `server.proxy`
+// is dev-only configuration. The browser only ever sees /sif/*.
+//
+// PRODUCTION STILL NEEDS A DECISION. A netlify.toml redirect cannot add an
+// Authorization header, so the deployed site needs either a Netlify Function
+// doing what this proxy does, or the bucket made public like the other two.
+// Until then the SIF desk has data on localhost and not on Netlify.
+function repoEnv(): Record<string, string> {
+  const out: Record<string, string> = {}
+  try {
+    const raw = fs.readFileSync(path.resolve(__dirname, '..', '.env'), 'utf8')
+    for (const line of raw.split(/\r?\n/)) {
+      const t = line.trim()
+      if (!t || t.startsWith('#')) continue
+      const i = t.indexOf('=')
+      if (i < 0) continue
+      out[t.slice(0, i).trim()] = t.slice(i + 1).trim().replace(/^["']|["']$/g, '')
+    }
+  } catch {
+    /* no .env -- the SIF proxy is simply not registered below */
+  }
+  return { ...out, ...(process.env as Record<string, string>) }
+}
+
+const ENV = repoEnv()
+const SIF_KEY = ENV.SUPABASE_SERVICE_KEY || ''
+const SIF_BUCKET = ENV.SUPABASE_SIF_BUCKET || 'SIF Data'
+const SUPABASE_ROOT = (ENV.SUPABASE_URL || 'https://qhxofgrntftnxqdhottd.supabase.co')
+  .replace(/\/+$/, '')
+
+const sifProxy = SIF_KEY
+  ? {
+      '/sif': {
+        target: `${SUPABASE_ROOT}/storage/v1/object/${encodeURIComponent(SIF_BUCKET)}`,
+        changeOrigin: true,
+        headers: { apikey: SIF_KEY, Authorization: `Bearer ${SIF_KEY}` },
+        rewrite: (p: string) => p.replace(/^\/sif/, ''),
+      },
+    }
+  : {}
+
+if (!SIF_KEY) {
+  console.warn('[vite] SUPABASE_SERVICE_KEY not found in ../.env — the SIF desk '
+             + 'will have no data. The MF desk is unaffected.')
+}
+
 function serveLocalIfPresent(prefix: string, root: string) {
   return (req: { url?: string }) => {
     const url = req.url ?? ''
@@ -52,6 +106,7 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/live\/indices/, ''),
       },
+      ...sifProxy,
     },
   },
   resolve: {

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useMeta } from '../hooks/useData'
 import { shortFundName } from '../utils/format'
-import { navPath, dataUrl, manifest } from '../config/dataPaths'
+import { navPath, dataUrl, manifest, marketUrl } from '../config/dataPaths'
 
 const CHART_COLORS = ['#22D3EE', '#F472B6', '#8B5CF6', '#F59E0B', '#34D399']
 const TIMEFRAMES   = ['1M', '3M', '6M', '12M', '3Y', '5Y', 'All']
@@ -197,7 +197,7 @@ export default function TrendFinder({ selectedFunds, onToggleFund }: Props) {
   useEffect(() => {
     plottable.forEach(b => {
       if (!activeIndices.has(b.id) || indexData[b.id]) return
-      fetch(`${import.meta.env.BASE_URL}data/index/${b.id}.json`)
+      fetch(marketUrl(`index/${b.id}.json`))
         .then(r => r.json())
         .then(d => setIndexData(prev => ({
           ...prev, [b.id]: { label: b.name, series: d.series as [string, number][] },

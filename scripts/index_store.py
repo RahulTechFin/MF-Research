@@ -183,6 +183,107 @@ def drop_after(points: Points, cap: str) -> Points:
     return {d: c for d, c in points.items() if d <= cap}
 
 
+# A one-day move this large is not a market move. The worst genuine daily moves
+# in six years of this data are NIFTY 50 at -13.0% (23 Mar 2020) and the gilt ETF
+# at +19.4% (16 Mar 2020), so a 3x threshold has two orders of magnitude of
+# headroom and cannot catch a real one.
+OUTLIER_RATIO = 3.0
+# How many consecutive bad days a glitch may span before it stops looking like a
+# glitch. GOLDBEES took two.
+OUTLIER_MAX_RUN = 5
+# How exactly the level must return to where it was for the run to count as a
+# round trip. A genuine crash and rebound does not land within 15% of its own
+# starting level after two days, and a decimal-shift glitch lands within 1%.
+OUTLIER_ROUND_TRIP = 0.15
+
+
+def drop_isolated_outliers(points: Points, name: str = "") -> tuple[Points, list[str]]:
+    """
+    Remove short runs where the quoted level jumps by orders of magnitude and
+    then comes straight back. Returns (cleaned, notes).
+
+    WHY THIS EXISTS
+    GOLD (GOLDBEES) is quoted around Rs 33 in December 2019, except on the 19th
+    and 20th, where the source reported 0.3355 and 0.3365 — the same price with
+    the decimal point moved two places. On the 23rd it is back to 33.65.
+
+    Two bad days out of 4,119 sounds harmless. It is not. A blend of NIFTY 50,
+    gilt and gold rebalanced daily reads 447% annualised volatility off that
+    series, against a true figure near 10%, because rebalancing re-buys at the
+    corrupted price and books a 99% loss followed by a 9,900% gain. It also
+    poisoned Multi Asset Blend, which is computed FROM gold and jumped 990% on
+    the same day. Every risk figure downstream of either was wrong.
+
+    WHAT IT WILL NOT TOUCH, WHICH MATTERS AS MUCH
+    INDIA VIX genuinely rises 64% in a day (24 Aug 2015), 42% (5 Aug 2024) and
+    66% (7 Apr 2025). Those are real and must survive, so this does not filter
+    on the size of a move alone. A run qualifies only when the level RETURNS:
+    the product of the ratios across it comes back to within OUTLIER_ROUND_TRIP
+    of 1. A sustained move never round-trips, so a genuine spike, a crash, or a
+    real re-denomination is left exactly as it is — and reported in the notes so
+    a human can look rather than having it silently rewritten.
+
+    Points are DROPPED, not rescaled. Dropping two days from a daily series
+    loses nothing that matters and cannot invent a price; guessing the factor
+    would put a number nobody quoted into the history.
+    """
+    if len(points) < 3:
+        return points, []
+
+    dates = sorted(points)
+    closes = [points[d] for d in dates]
+    notes: list[str] = []
+
+    # Every point where the level moves by more than the threshold, either way.
+    breaks: list[int] = []
+    for i in range(1, len(closes)):
+        prev, cur = closes[i - 1], closes[i]
+        if prev <= 0 or cur <= 0:
+            breaks.append(i)
+            continue
+        ratio = cur / prev
+        if ratio >= OUTLIER_RATIO or ratio <= 1 / OUTLIER_RATIO:
+            breaks.append(i)
+
+    if not breaks:
+        return points, []
+
+    bad: set[int] = set()
+    used: set[int] = set()
+    for a_pos, a in enumerate(breaks):
+        if a in used:
+            continue
+        for b in breaks[a_pos + 1:]:
+            if b - a > OUTLIER_MAX_RUN:
+                break
+            # Does the level come back to where it started?
+            start = closes[a - 1]
+            end = closes[b]
+            if start <= 0 or end <= 0:
+                continue
+            if abs(end / start - 1) <= OUTLIER_ROUND_TRIP:
+                bad.update(range(a, b))
+                used.update({a, b})
+                notes.append(
+                    f"{name or 'index'}: dropped {b - a} day(s) "
+                    f"{dates[a]}..{dates[b - 1]} — level {start:.4f} -> "
+                    f"{closes[a]:.4f} -> {end:.4f} is a round trip, not a move"
+                )
+                break
+
+    unexplained = [i for i in breaks if i not in used and i not in bad]
+    for i in unexplained:
+        notes.append(
+            f"{name or 'index'}: {dates[i]} moved "
+            f"{(closes[i] / closes[i - 1] - 1) * 100:+.0f}% and did NOT come back "
+            f"— left in place, check whether it is real"
+        )
+
+    if not bad:
+        return points, notes
+    return {d: c for k, (d, c) in enumerate(zip(dates, closes)) if k not in bad}, notes
+
+
 def validate_one(new: Points, old: Points) -> list[str]:
     """Reasons not to replace the published file. Empty list means safe."""
     problems = []
@@ -245,6 +346,13 @@ def refresh_one(index_id: int, name: str, slug: str, ticker: str,
     for d, close in rows:
         points[d] = close
     points = drop_after(prune(points), cap)
+
+    # Strip source glitches before anything measures this series. Done here
+    # rather than at read time so the bucket holds clean history: a corrupted
+    # close that reaches the file is read by every consumer forever.
+    points, outlier_notes = drop_isolated_outliers(points, name)
+    for note in outlier_notes:
+        log.warning("   %s", note)
 
     problems = validate_one(points, published)
     if problems:

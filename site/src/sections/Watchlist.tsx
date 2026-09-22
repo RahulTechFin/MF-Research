@@ -10,6 +10,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import DownloadButton from '../components/DownloadButton'
+import { currentDesk } from '../config/products'
 import type { SheetSpec } from '../utils/xlsx'
 import { useJson } from '../hooks/useData'
 import { fmtPct, shortFundName } from '../utils/format'
@@ -224,10 +225,12 @@ export default function Watchlist() {
    */
   const buildExport = (): SheetSpec | null => {
     if (!data) return null
+    const desk = currentDesk()
     return {
       sheet: `Fund Signals ${mode}`,
       title: `Fund Signals - Exit & Entry Watch (${mode})`,
       meta: [
+        ['Desk', desk.name],
         ['Mode', mode],
         ['Data as of', data.as_of],
         ['Periods examined', `${data.period_labels.length} ${mode === 'annual' ? 'years'
@@ -256,7 +259,7 @@ export default function Watchlist() {
         entry_streak: f.entry_streak,
         run: f.quartiles.map((q: number | null) => q == null ? '-' : `Q${q}`).join(' '),
       })),
-      fileName: `Fund Signals - ${mode} - ${data.as_of}`,
+      fileName: `${desk.code} Fund Signals - ${mode} - ${data.as_of}`,
     }
   }
   const periodWord = mode === 'monthly' ? 'month' : mode === 'annual' ? 'year' : 'quarter'
