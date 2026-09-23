@@ -784,15 +784,45 @@ def _monthly_returns_from_navs(nav_series: list[tuple[str, float]]) -> list[floa
     r_m = (NAV_end_this_month / NAV_end_prev_month) - 1.
     Expects nav_series as [(date_iso, nav), ...] sorted ascending.
     """
+    return [r for _, r in _monthly_returns_by_month(nav_series)]
+
+
+def _monthly_returns_by_month(
+    nav_series: list[tuple[str, float]]
+) -> list[tuple[str, float]]:
+    """
+    The same monthly returns, each LABELLED with the month it belongs to.
+
+    WHY THE LABEL MATTERS
+    risk_metrics pairs a fund's monthly returns against its benchmark's, and it
+    used to do that by position: take the last n of each list and zip them.
+    That is only correct while both lists cover the same months, and nothing
+    guaranteed they did. NIFTY LARGEMIDCAP 250 is missing July and August 2026
+    outright, so its list ran two entries short — and every Large & Mid Cap fund
+    was measured with its September return sitting opposite the benchmark's
+    June. Beta came out at 0.11 for a category of equity funds, upside capture
+    at 36% and downside at 2%, all of it arithmetic on mismatched months.
+
+    A gap also means the return ACROSS it is not a monthly return at all: June
+    to September is a quarter's move. Such a span is dropped rather than
+    labelled, because booking it as "September" would hand a category one
+    enormous outlier month and quietly inflate its volatility.
+    """
     if len(nav_series) < 2:
         return []
-    monthly = []
+    out: list[tuple[str, float]] = []
     for i in range(1, len(nav_series)):
-        prev_nav = nav_series[i - 1][1]
-        this_nav = nav_series[i][1]
-        if prev_nav > 0:
-            monthly.append((this_nav / prev_nav) - 1)
-    return monthly
+        prev_date, prev_nav = nav_series[i - 1]
+        this_date, this_nav = nav_series[i]
+        if prev_nav <= 0:
+            continue
+        py, pm = int(prev_date[:4]), int(prev_date[5:7])
+        ty, tm = int(this_date[:4]), int(this_date[5:7])
+        # Consecutive calendar months, or the span is not one month's return.
+        if (ty * 12 + tm) - (py * 12 + pm) != 1:
+            continue
+        out.append((this_date[:7], (this_nav / prev_nav) - 1))
+    return out
 
 
 def risk_metrics(
@@ -834,11 +864,18 @@ def risk_metrics(
         bench_ym[ym] = r
     bench_rows = [bench_ym[ym] for ym in sorted(bench_ym.keys())]
 
-    fund_monthly  = _monthly_returns_from_navs(fund_rows)
-    bench_monthly = _monthly_returns_from_navs(bench_rows)
+    fund_by_month  = dict(_monthly_returns_by_month(fund_rows))
+    bench_by_month = dict(_monthly_returns_by_month(bench_rows))
 
-    # Align to common dates (zip by position — both are monthly, same window)
-    n_common = min(len(fund_monthly), len(bench_monthly))
+    # ALIGN ON THE CALENDAR MONTH, not on list position.
+    #
+    # This used to zip the last n of each list together on the assumption that
+    # both covered the same window. They need not: a benchmark with a hole in
+    # its history is shorter, and zipping then measures a fund's September
+    # against the benchmark's June. See _monthly_returns_by_month for the
+    # category this actually broke and what the numbers looked like.
+    common = sorted(set(fund_by_month) & set(bench_by_month))
+    n_common = len(common)
     if n_common < 30:
         return {k: None for k in [
             "std_annual", "sharpe", "sortino", "beta", "alpha",
@@ -846,8 +883,8 @@ def risk_metrics(
             "composite_score", "fund_3y_cagr", "bench_3y_cagr",
         ]}
 
-    f_monthly = fund_monthly[-n_common:]
-    b_monthly = bench_monthly[-n_common:]
+    f_monthly = [fund_by_month[m] for m in common]
+    b_monthly = [bench_by_month[m] for m in common]
 
     Rf_annual  = risk_free_rate
     Rf_monthly = (1 + Rf_annual) ** (1 / 12) - 1

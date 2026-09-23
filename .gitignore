@@ -11,6 +11,12 @@ venv/
 .env.local
 .env.*.local
 site/.env.local
+# Hand-made copies of a .env — these carry a live key and are easy to
+# forget. Named narrowly so the .env files that ARE committed
+# (.env.example, site/.env.production, site/.env.team) still are.
+.env.backup*
+.env.bak
+.env.old
 
 # Databases are disposable build artifacts, never stored.
 # The scheme universe lives in data/scheme_catalogue.json, which IS committed.
