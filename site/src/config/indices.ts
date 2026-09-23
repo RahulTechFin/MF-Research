@@ -6,7 +6,7 @@
 // Pulse shows the day's closes without a rebuild or a deploy.
 //
 // The path below is proxied by netlify.toml to the public bucket. It is
-// deliberately NOT under /data/index/, which BlendStudio and TrendFinder use for
+// deliberately NOT under /data/index/, which TrendFinder uses for
 // the committed series of all 36 benchmarks — proxying that would break them.
 //
 // TO ADD A NINTH INDEX, three lists must agree:

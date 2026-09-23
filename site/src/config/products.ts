@@ -76,9 +76,9 @@ export const PRODUCTS: readonly Product[] = [
     blurb: 'Specialized Investment Funds',
     icon: '🧭',
     gradient: ['#7c3aed', '#F472B6'],
-    // Market Pulse and Blend Studio are not part of this desk. The Live Market
+    // Market Pulse is not part of this desk. The Live Market
     // strip is a separate component and DOES appear here, as on the MF desk.
-    excludes: ['market-pulse', 'blend'],
+    excludes: ['market-pulse'],
     sources: 'AMFI SIF NAVs, Yahoo Finance (indices)',
     // Served by the /sif proxy, which attaches the key the private bucket needs.
     dataPrefix: 'sif/data',

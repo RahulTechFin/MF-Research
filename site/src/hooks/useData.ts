@@ -201,7 +201,7 @@ export function useDrawdown(schemeCode: string) {
 }
 
 // useNavSeries / useIndexSeries / useCategoryHistory used to live here but were
-// never called — TrendFinder, BlendStudio, CategoryTrends and IndexChartModal
+// never called — TrendFinder, CategoryTrends and IndexChartModal
 // each fetch those paths directly, because they need several files in parallel
 // rather than the single-file shape this hook provides.
 

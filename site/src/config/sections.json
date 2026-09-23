@@ -24,8 +24,7 @@
     "category",
     "screener",
     "rolling",
-    "risk",
-    "blend"
+    "risk"
   ],
   "labels": {
     "market-pulse": "Market Pulse",
@@ -34,7 +33,6 @@
     "quartile": "Quartile Ranking",
     "rolling": "Rolling & P2P",
     "risk": "Risk Lab 🔒",
-    "blend": "Blend Studio",
     "watchlist": "Fund Signals"
   },
   "dataFiles": {
@@ -70,11 +68,6 @@
       "^meta\\.json$",
       "^risk_[^/]+\\.json$",
       "^nav/[^/]+\\.json$"
-    ],
-    "blend": [
-      "^meta\\.json$",
-      "^index/[^/]+\\.json$",
-      "^category_history/[^/]+\\.json$"
     ],
     "watchlist": [
       "^meta\\.json$",

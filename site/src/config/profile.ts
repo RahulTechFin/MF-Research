@@ -44,7 +44,7 @@ export const ADMIN_SECTIONS: readonly string[] = sectionConfig.adminSections
 
 export type SectionId =
   | 'market-pulse' | 'quartile'
-  | 'category' | 'screener' | 'rolling' | 'risk' | 'blend' | 'watchlist'
+  | 'category' | 'screener' | 'rolling' | 'risk' | 'watchlist'
 
 /**
  * Per-section build-time flags.
@@ -63,7 +63,6 @@ export const BUILD_SECTIONS = {
   screener: BUILD_HAS_ADMIN,
   rolling:  BUILD_HAS_ADMIN,
   risk:     BUILD_HAS_ADMIN,
-  blend:    BUILD_HAS_ADMIN,
 } as const
 
 // Spread-a-conditional-array so a team build never emits the admin labels.
@@ -81,7 +80,6 @@ const ALL_TABS: ReadonlyArray<{ id: SectionId; label: string }> = [
     ? [
         { id: 'rolling' as const, label: 'Rolling & P2P' },
         { id: 'risk' as const,    label: 'Risk Lab 🔒' },
-        { id: 'blend' as const,   label: 'Blend Studio' },
       ]
     : []),
 ]
@@ -101,8 +99,8 @@ export function isEnabled(id: string, isAdmin: boolean): boolean {
  * Tabs to render right now, for one desk.
  *
  * Two independent filters, and they mean different things. `excludes` is what
- * the desk does not HAVE — SIF has no Market Pulse and no Blend Studio, so those
- * tabs are absent rather than locked. isEnabled is the password gate on what a
+ * the desk does not HAVE — SIF has no Market Pulse, so that
+ * tab is absent rather than locked. isEnabled is the password gate on what a
  * desk does have.
  */
 export function visibleTabs(isAdmin: boolean, product: ProductId = 'mf') {

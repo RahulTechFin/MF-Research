@@ -11,7 +11,6 @@ import TrendFinder      from './sections/TrendFinder'
 import QuartileRanking  from './sections/QuartileRanking'
 import RollingP2P       from './sections/RollingP2P'
 import RiskLab          from './sections/RiskLab'
-import BlendStudio      from './sections/BlendStudio'
 import Watchlist        from './sections/Watchlist'
 import SifUniverse      from './sections/SifUniverse'
 import FundSearch       from './components/FundSearch'
@@ -295,9 +294,6 @@ export default function App() {
           <RiskLab />
         )}
 
-        {BUILD_SECTIONS.blend && isEnabled('blend', isAdmin) && activeTab === 'blend' && (
-          <BlendStudio />
-        )}
         </>)}
       </main>
 

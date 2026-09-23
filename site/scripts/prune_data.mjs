@@ -169,7 +169,7 @@ console.log(`[prune] verified — no restricted files remain in ${dataDir}`)
 // The profile comes from VITE_PROFILE via .env.team. If that file goes missing
 // the flag defaults to 'admin' and every section compiles in, while this script
 // still prunes the data because it reads the profile from argv. The result is a
-// team site advertising Risk Lab and Blend Studio. Catch that here rather than
+// team site advertising Risk Lab. Catch that here rather than
 // discovering it in production.
 // Derived from adminSections, so promoting a tab to public automatically stops
 // this check flagging its label. 'Sortino' is added as an internals canary —
