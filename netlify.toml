@@ -60,7 +60,7 @@
 #                                     nav/<code>.json
 [[redirects]]
   from   = "/data/*"
-  to     = "https://qhxofgrntftnxqdhottd.supabase.co/storage/v1/object/public/MF%20Data/:splat"
+  to     = "https://noclpcmacjuqhjlqekcr.supabase.co/storage/v1/object/public/MF%20Data/:splat"
   status = 200
   force  = true
 
@@ -72,7 +72,14 @@
 # prefix at a bucket holding only 8 would break both.
 [[redirects]]
   from   = "/live/indices/*"
-  to     = "https://qhxofgrntftnxqdhottd.supabase.co/storage/v1/object/public/Indicies%20Data/:splat"
+  to     = "https://noclpcmacjuqhjlqekcr.supabase.co/storage/v1/object/public/Indicies%20Data/:splat"
+  status = 200
+  force  = true
+
+# The SIF desk (src/hooks/useSif.ts reads /sif/web/sif.json and friends).
+[[redirects]]
+  from   = "/sif/*"
+  to     = "https://noclpcmacjuqhjlqekcr.supabase.co/storage/v1/object/public/SIF%20Data/:splat"
   status = 200
   force  = true
 

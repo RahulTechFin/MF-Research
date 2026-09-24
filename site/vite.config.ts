@@ -6,7 +6,7 @@ import path from 'path'
 // Dev mirrors what netlify.toml does in production. Required, not a nicety:
 // site/public/data is no longer committed, so a fresh clone has no local data and
 // `npm run dev` would 404 on every request without this.
-const SUPABASE_PUBLIC = 'https://qhxofgrntftnxqdhottd.supabase.co/storage/v1/object/public'
+const SUPABASE_PUBLIC = 'https://noclpcmacjuqhjlqekcr.supabase.co/storage/v1/object/public'
 
 // LOCAL DATA WINS OVER THE BUCKET.
 // The proxy used to be unconditional, so a locally built dataset was invisible:
@@ -56,7 +56,7 @@ function repoEnv(): Record<string, string> {
 const ENV = repoEnv()
 const SIF_KEY = ENV.SUPABASE_SERVICE_KEY || ''
 const SIF_BUCKET = ENV.SUPABASE_SIF_BUCKET || 'SIF Data'
-const SUPABASE_ROOT = (ENV.SUPABASE_URL || 'https://qhxofgrntftnxqdhottd.supabase.co')
+const SUPABASE_ROOT = (ENV.SUPABASE_URL || 'https://noclpcmacjuqhjlqekcr.supabase.co')
   .replace(/\/+$/, '')
 
 const sifProxy = SIF_KEY
@@ -96,7 +96,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/data': {
-        target: 'https://qhxofgrntftnxqdhottd.supabase.co/storage/v1/object/public/MF%20Data',
+        target: 'https://noclpcmacjuqhjlqekcr.supabase.co/storage/v1/object/public/MF%20Data',
         changeOrigin: true,
         bypass: serveLocalIfPresent('/data', LOCAL_DATA),
         rewrite: (p) => p.replace(/^\/data/, ''),
