@@ -62,7 +62,9 @@ export const PRODUCTS: readonly Product[] = [
     blurb: 'Regular plan · Growth option',
     icon: '📈',
     gradient: ['#1d4ed8', '#22D3EE'],
-    excludes: [],
+    // Fund Screener & Trend Finder is retired on this desk. The SIF desk keeps it,
+    // which is why the section components themselves stay in the codebase.
+    excludes: ['screener'],
     sources: 'AMFI (navs), Yahoo Finance (indices)',
     dataPrefix: '',
     ready: true,

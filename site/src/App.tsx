@@ -200,8 +200,9 @@ export default function App() {
   return (
     <div className="min-h-screen transition-colors duration-150" style={{ background: 'var(--bg-base)', color: 'var(--text-hi)' }}>
       {/* Ctrl+S fund search. Scoped to the desk that has a fund index — on a desk
-          still awaiting its data it would search the wrong universe. */}
-      {desk.ready && <FundSearch onPick={handlePickFund} />}
+          still awaiting its data it would search the wrong universe. A pick opens
+          the screener, so a desk without that tab gets no search at all. */}
+      {desk.ready && !desk.excludes.includes('screener') && <FundSearch onPick={handlePickFund} />}
 
       {/* The desk switcher: a handle against the left edge, below the freeze row.
           Admin-only for now. A team build drops the component and the SIF
